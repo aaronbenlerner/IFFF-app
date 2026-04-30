@@ -58,12 +58,31 @@ jobs:
         run: npm ci
 
       - name: Expo prebuild (generate iOS project)
-        run: npx expo prebuild --platform ios --clean
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Inspect ios/ directory
+        run: |
+          echo "--- ios/ contents ---"
+          ls -la ios/
+          echo "--- xcworkspace files ---"
+          ls -la ios/*.xcworkspace 2>&1 || echo "(no xcworkspace)"
+          echo "--- xcodeproj files ---"
+          ls -la ios/*.xcodeproj 2>&1 || echo "(no xcodeproj)"
 
       - name: Resolve scheme name
         id: scheme
         run: |
-          SCHEME=$(ls ios/*.xcodeproj | head -1 | xargs basename | sed 's/\.xcodeproj$//')
+          SCHEME=$(ls -d ios/*.xcodeproj 2>/dev/null | head -1 | xargs basename | sed 's/\.xcodeproj$//')
+          if [ -z "$SCHEME" ]; then
+            echo "ERROR: no .xcodeproj found in ios/"
+            exit 1
+          fi
           echo "Detected scheme: $SCHEME"
           echo "name=$SCHEME" >> $GITHUB_OUTPUT
 
@@ -79,7 +98,7 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM=9Y6XS38XC3 \
             PROVISIONING_PROFILE_SPECIFIER=IFFFWorkout_AdHoc \
-            -quiet
+            COMPILER_INDEX_STORE_ENABLE=NO
 
       - name: Create ExportOptions.plist
         run: |
