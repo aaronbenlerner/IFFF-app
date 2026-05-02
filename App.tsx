@@ -42,6 +42,15 @@ import {
   previewLine,
   collectKeys,
 } from "./src/workouts";
+import {
+  EXERCISES,
+  findExerciseMatch,
+  getSwapCandidates,
+  getSwapModes,
+  inferExerciseCategoryKey,
+  normalizeMode,
+  type Exercise,
+} from "./src/exerciseLibrary";
 import { loadStorage, saveStorage, resetAllStorage } from "./src/storage";
 import { ErrorBoundary } from "./src/ErrorBoundary";
 
@@ -63,11 +72,35 @@ type HistoryEntry = {
   doneCount: number;
   totalCount: number;
   done?: Record<string, number>;
+  substitutions?: Record<string, Substitution>;
 };
 
 type ActiveState = {
   done: Record<string, number>;
   confirm: { kind: "cancel" } | null;
+};
+
+type Substitution = {
+  exerciseId: string;
+  exerciseName: string;
+  video?: string;
+  mode: string;
+  categoryKey: string;
+  categoryLabel: string;
+  originalExercise: string;
+  originalMode?: string | null;
+  originalCategoryKey?: string | null;
+  updatedAt: number;
+};
+
+type SubstitutionMap = Record<string, Record<string, Substitution>>;
+
+type SwapTarget = {
+  slotKey: string;
+  exercise: string;
+  video?: string | null;
+  categoryHint?: string | null;
+  modeHint?: string | null;
 };
 
 type PickPayload =
@@ -227,6 +260,8 @@ function ExerciseRow({
   meta,
   done,
   onToggle,
+  swapLabel,
+  onSwap,
 }: {
   exercise: string;
   video?: string | null;
@@ -234,6 +269,8 @@ function ExerciseRow({
   meta?: string | null;
   done: boolean;
   onToggle: () => void;
+  swapLabel?: string | null;
+  onSwap?: () => void;
 }) {
   return (
     <Pressable
@@ -260,10 +297,182 @@ function ExerciseRow({
           {meta ? (
             <Text className="text-[11px] font-mono text-amber-500 mt-0.5">{meta}</Text>
           ) : null}
-          <VideoLink url={video} />
+          <View className="flex-row items-center justify-between mt-1">
+            <VideoLink url={video} />
+            {onSwap ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onSwap();
+                }}
+                className="px-2 py-1 rounded border border-zinc-700"
+              >
+                <Text className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
+                  {swapLabel || "Swap"}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
     </Pressable>
+  );
+}
+
+function applySubstitution(
+  slotKey: string,
+  base: { exercise: string; video?: string | null },
+  substitutions: Record<string, Substitution>,
+) {
+  const substitution = substitutions[slotKey];
+  if (!substitution) return { ...base, substitution: null as Substitution | null };
+  return {
+    exercise: substitution.exerciseName,
+    video: substitution.video || base.video,
+    substitution,
+  };
+}
+
+function SwapModal({
+  target,
+  selectedMode,
+  substitutions,
+  onModeChange,
+  onPick,
+  onClear,
+  onClose,
+}: {
+  target: SwapTarget | null;
+  selectedMode: string | null;
+  substitutions: Record<string, Substitution>;
+  onModeChange: (mode: string) => void;
+  onPick: (exercise: Exercise) => void;
+  onClear: () => void;
+  onClose: () => void;
+}) {
+  if (!target) return null;
+
+  const categoryKey = inferExerciseCategoryKey(target.categoryHint, target.exercise);
+  const original = findExerciseMatch(target.exercise, target.categoryHint, target.modeHint);
+  const currentSubstitution = substitutions[target.slotKey];
+  const currentMode = selectedMode || normalizeMode(currentSubstitution?.mode || target.modeHint || original?.mode);
+  const modes = getSwapModes(categoryKey);
+  const candidates = getSwapCandidates(categoryKey, currentMode, original?.id);
+  const sameMode = normalizeMode(target.modeHint || original?.mode) === currentMode;
+
+  return (
+    <Modal transparent visible animationType="slide" onRequestClose={onClose}>
+      <View className="flex-1 bg-black/80 justify-end">
+        <View className="bg-zinc-950 border-t border-zinc-800 rounded-t-lg max-h-[86%]">
+          <View className="p-4 border-b border-zinc-800">
+            <Text className="text-[10px] tracking-[2.5px] text-amber-500 font-mono uppercase">
+              Swap Exercise
+            </Text>
+            <Text className="text-white text-lg font-bold mt-1" numberOfLines={2}>
+              {target.exercise}
+            </Text>
+            <Text className="text-zinc-500 text-[11px] mt-1">
+              {categoryKey
+                ? sameMode
+                  ? "Keeping equipment mode"
+                  : "Changing equipment mode"
+                : "No master-list category match found"}
+            </Text>
+          </View>
+
+          {!categoryKey ? (
+            <View className="p-4">
+              <Text className="text-zinc-400 text-sm">
+                This exercise could not be matched to a master-list category, so
+                swap options are unavailable.
+              </Text>
+              <Pressable
+                onPress={onClose}
+                className="bg-amber-500 py-3 rounded-md items-center mt-4"
+              >
+                <Text className="text-black text-xs font-black uppercase tracking-wider">
+                  Close
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <View className="p-4 border-b border-zinc-900">
+                <Text className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-2">
+                  Equipment Mode
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row gap-2">
+                    {modes.map((mode) => {
+                      const active = mode === currentMode;
+                      return (
+                        <Pressable
+                          key={mode}
+                          onPress={() => onModeChange(mode)}
+                          className={`px-3 py-2 rounded-md border ${active ? "bg-amber-500 border-amber-500" : "bg-zinc-900 border-zinc-800"}`}
+                        >
+                          <Text
+                            className={`text-[11px] font-bold ${active ? "text-black" : "text-zinc-400"}`}
+                          >
+                            {mode}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+
+              <ScrollView contentContainerClassName="p-4 gap-2">
+                {candidates.length === 0 ? (
+                  <Text className="text-zinc-500 text-sm">
+                    No alternatives found for this category and mode.
+                  </Text>
+                ) : (
+                  candidates.map((exercise) => (
+                    <Pressable
+                      key={exercise.id}
+                      onPress={() => onPick(exercise)}
+                      className="bg-zinc-900 border border-zinc-800 rounded-md p-3"
+                    >
+                      <Text className="text-white font-bold text-sm">
+                        {exercise.name}
+                      </Text>
+                      <Text className="text-[11px] text-zinc-500 mt-0.5">
+                        {exercise.categoryLabel} · {exercise.mode}
+                      </Text>
+                      <VideoLink url={exercise.video} />
+                    </Pressable>
+                  ))
+                )}
+              </ScrollView>
+
+              <View className="p-4 border-t border-zinc-800 flex-row gap-2">
+                <Pressable
+                  onPress={onClose}
+                  className="flex-1 bg-zinc-900 border border-zinc-800 py-3 rounded-md items-center"
+                >
+                  <Text className="text-zinc-300 text-xs font-bold uppercase tracking-wider">
+                    Cancel
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={onClear}
+                  disabled={!currentSubstitution}
+                  className={`flex-1 py-3 rounded-md items-center ${currentSubstitution ? "bg-red-500" : "bg-zinc-900 border border-zinc-800"}`}
+                >
+                  <Text
+                    className={`text-xs font-bold uppercase tracking-wider ${currentSubstitution ? "text-white" : "text-zinc-600"}`}
+                  >
+                    Reset Slot
+                  </Text>
+                </Pressable>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -275,10 +484,14 @@ function SplitView({
   w,
   isDone,
   toggle,
+  substitutions,
+  onSwap,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
+  substitutions: Record<string, Substitution>;
+  onSwap: (target: SwapTarget) => void;
 }) {
   return (
     <View className="gap-2">
@@ -288,11 +501,21 @@ function SplitView({
           <ExerciseRow
             key={i}
             sub={g.label}
-            exercise={g.exercise}
-            video={g.video}
+            exercise={applySubstitution(`g${i}`, { exercise: g.exercise, video: g.video }, substitutions).exercise}
+            video={applySubstitution(`g${i}`, { exercise: g.exercise, video: g.video }, substitutions).video}
             meta={meta}
             done={isDone(`g${i}`)}
             onToggle={() => toggle(`g${i}`)}
+            swapLabel={substitutions[`g${i}`] ? "Swapped" : "Swap"}
+            onSwap={() =>
+              onSwap({
+                slotKey: `g${i}`,
+                exercise: g.exercise,
+                video: g.video,
+                categoryHint: g.movement,
+                modeHint: g.mode,
+              })
+            }
           />
         );
       })}
@@ -306,12 +529,16 @@ function PatternBlock({
   prefix,
   isDone,
   toggle,
+  substitutions,
+  onSwap,
 }: {
   title: string;
   rows: any[];
   prefix: string;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
+  substitutions: Record<string, Substitution>;
+  onSwap: (target: SwapTarget) => void;
 }) {
   if (!rows.length) return null;
   return (
@@ -324,11 +551,21 @@ function PatternBlock({
           <ExerciseRow
             key={i}
             sub={`${r.track}${r.reps ? " · " + r.reps : ""}`}
-            exercise={r.exercise}
-            video={r.video}
+            exercise={applySubstitution(`${prefix}_${i}`, { exercise: r.exercise, video: r.video }, substitutions).exercise}
+            video={applySubstitution(`${prefix}_${i}`, { exercise: r.exercise, video: r.video }, substitutions).video}
             meta={r.movement}
             done={isDone(`${prefix}_${i}`)}
             onToggle={() => toggle(`${prefix}_${i}`)}
+            swapLabel={substitutions[`${prefix}_${i}`] ? "Swapped" : "Swap"}
+            onSwap={() =>
+              onSwap({
+                slotKey: `${prefix}_${i}`,
+                exercise: r.exercise,
+                video: r.video,
+                categoryHint: r.movement,
+                modeHint: r.track,
+              })
+            }
           />
         ))}
       </View>
@@ -340,10 +577,14 @@ function TotalBodyView({
   w,
   isDone,
   toggle,
+  substitutions,
+  onSwap,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
+  substitutions: Record<string, Substitution>;
+  onSwap: (target: SwapTarget) => void;
 }) {
   return (
     <View className="gap-4">
@@ -353,6 +594,8 @@ function TotalBodyView({
         prefix="p1"
         isDone={isDone}
         toggle={toggle}
+        substitutions={substitutions}
+        onSwap={onSwap}
       />
       <PatternBlock
         title="Pattern 2 · Repeat 3–5 Rounds"
@@ -360,6 +603,8 @@ function TotalBodyView({
         prefix="p2"
         isDone={isDone}
         toggle={toggle}
+        substitutions={substitutions}
+        onSwap={onSwap}
       />
       <PatternBlock
         title="Pattern 3 · Isolation · Repeat 1–3 Rounds"
@@ -367,6 +612,8 @@ function TotalBodyView({
         prefix="p3"
         isDone={isDone}
         toggle={toggle}
+        substitutions={substitutions}
+        onSwap={onSwap}
       />
     </View>
   );
@@ -376,10 +623,14 @@ function Cardio12View({
   w,
   isDone,
   toggle,
+  substitutions,
+  onSwap,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
+  substitutions: Record<string, Substitution>;
+  onSwap: (target: SwapTarget) => void;
 }) {
   return (
     <View className="gap-2">
@@ -395,10 +646,20 @@ function Cardio12View({
         <ExerciseRow
           key={i}
           sub={`${(i + 1).toString().padStart(2, "0")} · ${e.movement || ""}`}
-          exercise={e.exercise}
-          video={e.video}
+          exercise={applySubstitution(`x_${i}`, { exercise: e.exercise, video: e.video }, substitutions).exercise}
+          video={applySubstitution(`x_${i}`, { exercise: e.exercise, video: e.video }, substitutions).video}
           done={isDone(`x_${i}`)}
           onToggle={() => toggle(`x_${i}`)}
+          swapLabel={substitutions[`x_${i}`] ? "Swapped" : "Swap"}
+          onSwap={() =>
+            onSwap({
+              slotKey: `x_${i}`,
+              exercise: e.exercise,
+              video: e.video,
+              categoryHint: e.movement,
+              modeHint: e.movement,
+            })
+          }
         />
       ))}
     </View>
@@ -409,10 +670,14 @@ function Cardio4GView({
   w,
   isDone,
   toggle,
+  substitutions,
+  onSwap,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
+  substitutions: Record<string, Substitution>;
+  onSwap: (target: SwapTarget) => void;
 }) {
   return (
     <View className="gap-4">
@@ -434,10 +699,20 @@ function Cardio4GView({
               <ExerciseRow
                 key={i}
                 sub={`${i + 1} · ${it.equipment || ""}`}
-                exercise={it.exercise}
-                video={it.video}
+                exercise={applySubstitution(`G${letter}_${i}`, { exercise: it.exercise, video: it.video }, substitutions).exercise}
+                video={applySubstitution(`G${letter}_${i}`, { exercise: it.exercise, video: it.video }, substitutions).video}
                 done={isDone(`G${letter}_${i}`)}
                 onToggle={() => toggle(`G${letter}_${i}`)}
+                swapLabel={substitutions[`G${letter}_${i}`] ? "Swapped" : "Swap"}
+                onSwap={() =>
+                  onSwap({
+                    slotKey: `G${letter}_${i}`,
+                    exercise: it.exercise,
+                    video: it.video,
+                    categoryHint: it.equipment,
+                    modeHint: it.equipment,
+                  })
+                }
               />
             ))}
           </View>
@@ -451,10 +726,14 @@ function ExtrasView({
   w,
   isDone,
   toggle,
+  substitutions,
+  onSwap,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
+  substitutions: Record<string, Substitution>;
+  onSwap: (target: SwapTarget) => void;
 }) {
   if (w.abs.length === 0 && w.finisher.length === 0 && w.steady.length === 0)
     return null;
@@ -469,11 +748,21 @@ function ExtrasView({
             {w.abs.map((a: any, i: number) => (
               <ExerciseRow
                 key={i}
-                exercise={a.exercise}
-                video={a.video}
+                exercise={applySubstitution(`A_${i}`, { exercise: a.exercise, video: a.video }, substitutions).exercise}
+                video={applySubstitution(`A_${i}`, { exercise: a.exercise, video: a.video }, substitutions).video}
                 meta={a.reps}
                 done={isDone(`A_${i}`)}
                 onToggle={() => toggle(`A_${i}`)}
+                swapLabel={substitutions[`A_${i}`] ? "Swapped" : "Swap"}
+                onSwap={() =>
+                  onSwap({
+                    slotKey: `A_${i}`,
+                    exercise: a.exercise,
+                    video: a.video,
+                    categoryHint: "Abs",
+                    modeHint: a.exercise,
+                  })
+                }
               />
             ))}
           </View>
@@ -488,10 +777,20 @@ function ExtrasView({
             {w.finisher.map((a: any, i: number) => (
               <ExerciseRow
                 key={i}
-                exercise={a.exercise}
-                video={a.video}
+                exercise={applySubstitution(`F_${i}`, { exercise: a.exercise, video: a.video }, substitutions).exercise}
+                video={applySubstitution(`F_${i}`, { exercise: a.exercise, video: a.video }, substitutions).video}
                 done={isDone(`F_${i}`)}
                 onToggle={() => toggle(`F_${i}`)}
+                swapLabel={substitutions[`F_${i}`] ? "Swapped" : "Swap"}
+                onSwap={() =>
+                  onSwap({
+                    slotKey: `F_${i}`,
+                    exercise: a.exercise,
+                    video: a.video,
+                    categoryHint: a.exercise,
+                    modeHint: a.exercise,
+                  })
+                }
               />
             ))}
           </View>
@@ -506,10 +805,20 @@ function ExtrasView({
             {w.steady.map((a: any, i: number) => (
               <ExerciseRow
                 key={i}
-                exercise={a.exercise}
-                video={a.video}
+                exercise={applySubstitution(`S_${i}`, { exercise: a.exercise, video: a.video }, substitutions).exercise}
+                video={applySubstitution(`S_${i}`, { exercise: a.exercise, video: a.video }, substitutions).video}
                 done={isDone(`S_${i}`)}
                 onToggle={() => toggle(`S_${i}`)}
+                swapLabel={substitutions[`S_${i}`] ? "Swapped" : "Swap"}
+                onSwap={() =>
+                  onSwap({
+                    slotKey: `S_${i}`,
+                    exercise: a.exercise,
+                    video: a.video,
+                    categoryHint: a.exercise,
+                    modeHint: a.exercise,
+                  })
+                }
               />
             ))}
           </View>
@@ -649,16 +958,22 @@ function WorkoutScreen({
   workout,
   state,
   setState,
+  substitutions,
+  setWorkoutSubstitutions,
   onFinish,
   onCancel,
 }: {
   workout: any;
   state: ActiveState;
   setState: (updater: (s: ActiveState) => ActiveState) => void;
+  substitutions: Record<string, Substitution>;
+  setWorkoutSubstitutions: (updater: (s: Record<string, Substitution>) => Record<string, Substitution>) => void;
   onFinish: () => void;
   onCancel: () => void;
 }) {
   const w = workout;
+  const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
+  const [swapMode, setSwapMode] = useState<string | null>(null);
   const askConfirm = state.confirm;
   const setAskConfirm = (v: ActiveState["confirm"]) =>
     setState((s) => ({ ...s, confirm: v }));
@@ -675,6 +990,53 @@ function WorkoutScreen({
 
   const totalKeys = collectKeys(w);
   const doneCount = totalKeys.filter((k: string) => isDone(k)).length;
+
+  const openSwap = (target: SwapTarget) => {
+    const existing = substitutions[target.slotKey];
+    const original = findExerciseMatch(target.exercise, target.categoryHint, target.modeHint);
+    setSwapTarget(target);
+    setSwapMode(normalizeMode(existing?.mode || target.modeHint || original?.mode));
+  };
+
+  const pickSwap = (exercise: Exercise) => {
+    if (!swapTarget) return;
+    const original = findExerciseMatch(
+      swapTarget.exercise,
+      swapTarget.categoryHint,
+      swapTarget.modeHint,
+    );
+    setWorkoutSubstitutions((current) => ({
+      ...current,
+      [swapTarget.slotKey]: {
+        exerciseId: exercise.id,
+        exerciseName: exercise.name,
+        video: exercise.video,
+        mode: exercise.mode,
+        categoryKey: exercise.categoryKey,
+        categoryLabel: exercise.categoryLabel,
+        originalExercise: swapTarget.exercise,
+        originalMode: swapTarget.modeHint,
+        originalCategoryKey: original?.categoryKey || inferExerciseCategoryKey(
+          swapTarget.categoryHint,
+          swapTarget.exercise,
+        ),
+        updatedAt: Date.now(),
+      },
+    }));
+    setSwapTarget(null);
+    setSwapMode(null);
+  };
+
+  const clearSwap = () => {
+    if (!swapTarget) return;
+    setWorkoutSubstitutions((current) => {
+      const next = { ...current };
+      delete next[swapTarget.slotKey];
+      return next;
+    });
+    setSwapTarget(null);
+    setSwapMode(null);
+  };
 
   return (
     <ScrollView contentContainerClassName="p-4 pb-24 gap-4">
@@ -706,19 +1068,49 @@ function WorkoutScreen({
       </View>
 
       {w.type === "strength_split" && (
-        <SplitView w={w} isDone={isDone} toggle={toggle} />
+        <SplitView
+          w={w}
+          isDone={isDone}
+          toggle={toggle}
+          substitutions={substitutions}
+          onSwap={openSwap}
+        />
       )}
       {w.type === "strength_total_body" && (
-        <TotalBodyView w={w} isDone={isDone} toggle={toggle} />
+        <TotalBodyView
+          w={w}
+          isDone={isDone}
+          toggle={toggle}
+          substitutions={substitutions}
+          onSwap={openSwap}
+        />
       )}
       {w.type === "cardio_12" && (
-        <Cardio12View w={w} isDone={isDone} toggle={toggle} />
+        <Cardio12View
+          w={w}
+          isDone={isDone}
+          toggle={toggle}
+          substitutions={substitutions}
+          onSwap={openSwap}
+        />
       )}
       {w.type === "cardio_4group" && (
-        <Cardio4GView w={w} isDone={isDone} toggle={toggle} />
+        <Cardio4GView
+          w={w}
+          isDone={isDone}
+          toggle={toggle}
+          substitutions={substitutions}
+          onSwap={openSwap}
+        />
       )}
 
-      <ExtrasView w={w} isDone={isDone} toggle={toggle} />
+      <ExtrasView
+        w={w}
+        isDone={isDone}
+        toggle={toggle}
+        substitutions={substitutions}
+        onSwap={openSwap}
+      />
 
       <Pressable
         onPress={onFinish}
@@ -740,6 +1132,18 @@ function WorkoutScreen({
           onCancel();
         }}
         onCancel={() => setAskConfirm(null)}
+      />
+      <SwapModal
+        target={swapTarget}
+        selectedMode={swapMode}
+        substitutions={substitutions}
+        onModeChange={setSwapMode}
+        onPick={pickSwap}
+        onClear={clearSwap}
+        onClose={() => {
+          setSwapTarget(null);
+          setSwapMode(null);
+        }}
       />
     </ScrollView>
   );
@@ -1006,10 +1410,18 @@ function SetupScreen({
           ))}
           <View className="pt-1 mt-1 border-t border-zinc-800 flex-row justify-between">
             <Text className="text-[11px] font-mono text-white font-bold">
-              Total
+              Workout Total
             </Text>
             <Text className="text-[11px] font-mono text-white font-bold">
               {WORKOUTS.length}
+            </Text>
+          </View>
+          <View className="pt-1 flex-row justify-between">
+            <Text className="text-[11px] font-mono text-white font-bold">
+              Exercise Master
+            </Text>
+            <Text className="text-[11px] font-mono text-white font-bold">
+              {EXERCISES.length}
             </Text>
           </View>
         </View>
@@ -1064,20 +1476,23 @@ function AppInner() {
   const [week, setWeek] = useState<Week>("A");
   const [day, setDay] = useState<number>(getCurrentDay());
   const [lastMonday, setLastMonday] = useState<string | null>(null);
+  const [substitutions, setSubstitutions] = useState<SubstitutionMap>({});
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const [h, w, d, lm, aw, as] = await Promise.all([
+      const [h, w, d, lm, aw, as, subs] = await Promise.all([
         loadStorage<HistoryEntry[]>("history", []),
         loadStorage<Week>("week", "A"),
         loadStorage<number>("day", getCurrentDay()),
         loadStorage<string | null>("lastMonday", null),
         loadStorage<any>("activeWorkout", null),
         loadStorage<ActiveState>("activeState", { done: {}, confirm: null }),
+        loadStorage<SubstitutionMap>("substitutions", {}),
       ]);
 
       setHistory(Array.isArray(h) ? h : []);
+      setSubstitutions(subs && typeof subs === "object" ? subs : {});
 
       const thisMonday = getCurrentMondayISO();
       let nextWeek: Week = w === "A" || w === "B" ? w : "A";
@@ -1131,6 +1546,9 @@ function AppInner() {
   useEffect(() => {
     if (loaded) saveStorage("activeState", activeState);
   }, [activeState, loaded]);
+  useEffect(() => {
+    if (loaded) saveStorage("substitutions", substitutions);
+  }, [substitutions, loaded]);
 
   const handlePick = (pick: PickPayload) => {
     if (pick.kind === "workout") {
@@ -1168,6 +1586,7 @@ function AppInner() {
       doneCount,
       totalCount: totalKeys.length,
       done: activeState.done,
+      substitutions: substitutions[activeWorkout.id],
     };
     setHistory((h) => [...h, entry]);
     setActiveWorkout(null);
@@ -1185,6 +1604,7 @@ function AppInner() {
     const today = getCurrentDay();
     const thisMonday = getCurrentMondayISO();
     setHistory([]);
+    setSubstitutions({});
     setActiveWorkout(null);
     setActiveState({ done: {}, confirm: null });
     setWeek("A");
@@ -1205,6 +1625,13 @@ function AppInner() {
               setActiveState((s) =>
                 typeof updater === "function" ? updater(s) : updater,
               )
+            }
+            substitutions={substitutions[activeWorkout.id] || {}}
+            setWorkoutSubstitutions={(updater) =>
+              setSubstitutions((current) => ({
+                ...current,
+                [activeWorkout.id]: updater(current[activeWorkout.id] || {}),
+              }))
             }
             onFinish={handleFinish}
             onCancel={handleCancel}
