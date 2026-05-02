@@ -57,6 +57,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Validate app
+        run: npm run check
+
       - name: Expo prebuild (generate iOS project)
         run: npx expo prebuild --platform ios --clean --no-install
 
@@ -134,19 +137,8 @@ jobs:
           IPA_SRC=$(ls build/export/*.ipa | head -1)
           cp "$IPA_SRC" ota/IFFF.ipa
 
-          # Generate placeholder icon PNGs (amber/orange to match app palette)
-          python3 -c "
-          import struct, zlib
-          def make_png(w, h, r, g, b):
-              def chunk(ctype, data):
-                  return struct.pack('>I', len(data)) + ctype + data + struct.pack('>I', zlib.crc32(ctype + data) & 0xffffffff)
-              raw = b''
-              for _ in range(h):
-                  raw += b'\x00' + bytes([r, g, b]) * w
-              return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(raw)) + chunk(b'IEND', b'')
-          open('ota/icon-57.png',  'wb').write(make_png(57,  57,  245, 158, 11))
-          open('ota/icon-512.png', 'wb').write(make_png(512, 512, 245, 158, 11))
-          "
+          cp assets/icon.png ota/icon-57.png
+          cp assets/icon.png ota/icon-512.png
 
           cat > ota/manifest.plist << 'PLIST'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -200,7 +192,7 @@ jobs:
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>IFFF — Install</title>
+            <title>IFFF - Install</title>
             <style>
               body { font-family: -apple-system, system-ui, sans-serif; max-width: 480px; margin: 40px auto; padding: 20px; text-align: center; background: #09090b; color: #fafafa; }
               h1 { font-weight: 900; letter-spacing: 0.05em; color: #f59e0b; }
@@ -215,7 +207,7 @@ jobs:
             <a class="btn" href="itms-services://?action=download-manifest&url=https://aaronbenlerner.github.io/IFFF-app/manifest.plist">
               Install App
             </a>
-            <p class="note">Open this page in Safari on your iPhone.<br>After installing, go to Settings → General → VPN &amp; Device Management to trust the developer profile.</p>
+            <p class="note">Open this page in Safari on your iPhone.<br>After installing, go to Settings &gt; General &gt; VPN &amp; Device Management to trust the developer profile.</p>
           </body>
           </html>
           HTML

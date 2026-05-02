@@ -6,7 +6,9 @@
   "scripts": {
     "start": "expo start",
     "ios": "expo run:ios",
-    "prebuild": "expo prebuild --platform ios --clean"
+    "prebuild": "expo prebuild --platform ios --clean",
+    "validate:data": "node scripts/validate-workouts.js",
+    "check": "npm run validate:data && tsc --noEmit"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.1.2",

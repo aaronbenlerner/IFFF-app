@@ -98,7 +98,7 @@ function Header({
           <Text className="text-[10px] tracking-[2.5px] text-amber-500 font-mono uppercase">
             Workout System
           </Text>
-          <Text className="text-2xl text-white font-archivo">STAGE</Text>
+          <Text className="text-2xl text-white font-archivo">IFFF</Text>
         </View>
         <View className="items-end">
           <Text className="text-[10px] tracking-widest text-zinc-500 font-mono uppercase">
@@ -757,6 +757,33 @@ function HistoryScreen({
   onClear: () => void;
 }) {
   const [askClear, setAskClear] = useState(false);
+  const startOfWeek = new Date();
+  const dayOfWeek = startOfWeek.getDay();
+  const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  startOfWeek.setDate(startOfWeek.getDate() - mondayOffset);
+  startOfWeek.setHours(0, 0, 0, 0);
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+  const weekCount = history.filter((h) => h.completedAt >= startOfWeek.getTime()).length;
+  const monthCount = history.filter((h) => h.completedAt >= startOfMonth.getTime()).length;
+  const avgCompletion =
+    history.length === 0
+      ? 0
+      : Math.round(
+          history.reduce(
+            (sum, h) => sum + h.doneCount / Math.max(h.totalCount, 1),
+            0,
+          ) /
+            history.length *
+            100,
+        );
+  const lastWorkout = history.reduce<HistoryEntry | null>(
+    (latest, entry) =>
+      !latest || entry.completedAt > latest.completedAt ? entry : latest,
+    null,
+  );
+
   if (history.length === 0) {
     return (
       <View className="p-8 items-center">
@@ -782,6 +809,33 @@ function HistoryScreen({
             Clear
           </Text>
         </Pressable>
+      </View>
+      <View className="bg-zinc-900 border border-zinc-800 rounded-md p-3">
+        <View className="flex-row">
+          <View className="flex-1">
+            <Text className="text-[9px] text-zinc-500 font-mono uppercase tracking-wider">
+              This Week
+            </Text>
+            <Text className="text-xl text-white font-archivo">{weekCount}</Text>
+          </View>
+          <View className="flex-1">
+            <Text className="text-[9px] text-zinc-500 font-mono uppercase tracking-wider">
+              This Month
+            </Text>
+            <Text className="text-xl text-white font-archivo">{monthCount}</Text>
+          </View>
+          <View className="flex-1">
+            <Text className="text-[9px] text-zinc-500 font-mono uppercase tracking-wider">
+              Avg Done
+            </Text>
+            <Text className="text-xl text-white font-archivo">{avgCompletion}%</Text>
+          </View>
+        </View>
+        {lastWorkout ? (
+          <Text className="text-[11px] text-zinc-500 mt-2" numberOfLines={1}>
+            Last: {lastWorkout.name} · {daysAgo(lastWorkout.completedAt)}
+          </Text>
+        ) : null}
       </View>
       {history
         .slice()
@@ -977,7 +1031,7 @@ function SetupScreen({
       </View>
 
       <Text className="text-[10px] text-zinc-700 font-mono text-center pt-4 border-t border-zinc-900">
-        STAGE · v0.3 · {WORKOUTS.length} prebuilt workouts
+        IFFF · v0.4 · {WORKOUTS.length} prebuilt workouts
       </Text>
 
       <ConfirmModal
@@ -1128,10 +1182,15 @@ function AppInner() {
 
   const handleResetAll = async () => {
     await resetAllStorage();
+    const today = getCurrentDay();
+    const thisMonday = getCurrentMondayISO();
     setHistory([]);
     setActiveWorkout(null);
     setActiveState({ done: {}, confirm: null });
-    setLastMonday(getCurrentMondayISO());
+    setWeek("A");
+    setDay(today);
+    setLastMonday(thisMonday);
+    setTab("today");
   };
 
   return (
