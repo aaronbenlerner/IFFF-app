@@ -103,6 +103,24 @@ function normalizeMode(value) {
   return value || "General";
 }
 
+const STRENGTH_MODE_MARKERS = new Map([
+  ["machines", "Machines"],
+  ["free weights", "Free Weights"],
+  ["body weight", "Bodyweight"],
+  ["bodyweight", "Bodyweight"],
+  ["barbell", "Barbell"],
+  ["dumbbells", "Dumbbells"],
+  ["dumbells", "Dumbbells"],
+]);
+
+function strengthModeMarker(value) {
+  return STRENGTH_MODE_MARKERS.get(normalizeName(value));
+}
+
+function cleanUrl(value) {
+  return value ? value.replace(/'+$/g, "") : value;
+}
+
 function readSharedStrings(entries) {
   const xml = entries.get("xl/sharedStrings.xml") || "";
   const strings = [];
@@ -187,12 +205,6 @@ function cellRef(col, rowIndexZeroBased) {
   return `${out}${rowIndexZeroBased + 1}`;
 }
 
-function classifyStrengthMode(name, rowMode) {
-  const row = normalizeMode(rowMode);
-  if (row !== "General" && !row.startsWith("There")) return row;
-  return normalizeMode(name);
-}
-
 function addExercise(list, seen, exercise) {
   if (
     !exercise.name ||
@@ -200,18 +212,9 @@ function addExercise(list, seen, exercise) {
     /^there are no exercises/i.test(exercise.name) ||
     /^movement\.$/i.test(exercise.name)
   ) return;
-  const key = [
-    normalizeName(exercise.name),
-    exercise.kind,
-    exercise.categoryKey,
-    normalizeName(exercise.mode),
-  ].join("|");
-  if (seen.has(key)) {
-    const existing = seen.get(key);
-    if (!existing.video && exercise.video) existing.video = exercise.video;
-    return;
-  }
-  const idBase = slug(`${exercise.kind}_${exercise.categoryKey}_${exercise.mode}_${exercise.name}`) || `exercise_${list.length + 1}`;
+  const modeRaw = exercise.modeRaw || exercise.mode || "General";
+  const modeGroup = normalizeMode(exercise.modeGroup || exercise.mode || modeRaw);
+  const idBase = slug(`${exercise.kind}_${exercise.categoryKey}_${modeGroup}_${exercise.name}`) || `exercise_${list.length + 1}`;
   const idCounts = list.idCounts || (list.idCounts = new Map());
   const count = idCounts.get(idBase) || 0;
   idCounts.set(idBase, count + 1);
@@ -220,9 +223,12 @@ function addExercise(list, seen, exercise) {
     id,
     aliases: [],
     ...exercise,
+    mode: modeGroup,
+    modeRaw,
+    modeGroup,
+    video: cleanUrl(exercise.video),
     normalizedName: normalizeName(exercise.name),
   };
-  seen.set(key, row);
   list.push(row);
 }
 
@@ -240,16 +246,24 @@ function parseWorkbook(filePath) {
         .filter(([, value]) => value && !/^\d+$/.test(value))
         .map(([col, value]) => ({ col, label: value }));
       for (const header of headers) {
-        for (let row = 2; row < sheet.rows.length; row++) {
+        let modeRaw = "General";
+        for (let row = 1; row < sheet.rows.length; row++) {
           const name = sheet.rows[row].get(header.col);
           if (!name) continue;
-          const mode = classifyStrengthMode(name, sheet.rows[1].get(header.col));
+          const marker = strengthModeMarker(name);
+          if (marker) {
+            modeRaw = marker;
+            continue;
+          }
+          const modeGroup = normalizeMode(name);
           addExercise(list, seen, {
             name,
             kind: "strength",
             categoryKey: slug(header.label.replace(/- Steve$/i, "")),
             categoryLabel: header.label.replace(/- Steve$/i, ""),
-            mode,
+            mode: modeGroup,
+            modeRaw,
+            modeGroup,
             video: (sheet.cells.get(cellRef(header.col, row)) || {}).hyperlink,
             sourceSheet: sheetInfo.name,
           });
@@ -269,6 +283,8 @@ function parseWorkbook(filePath) {
             categoryKey: slug(header.label),
             categoryLabel: header.label,
             mode: normalizeMode(header.label),
+            modeRaw: header.label,
+            modeGroup: normalizeMode(header.label),
             video: (sheet.cells.get(cellRef(header.col, row)) || {}).hyperlink,
             sourceSheet: sheetInfo.name,
           });
@@ -290,6 +306,8 @@ function parseWorkbook(filePath) {
             categoryKey: slug(section.label),
             categoryLabel: section.label,
             mode: "General",
+            modeRaw: "General",
+            modeGroup: "General",
             video: (sheet.cells.get(cellRef(section.videoCol, row)) || {}).hyperlink,
             sourceSheet: sheetInfo.name,
           });
@@ -310,6 +328,8 @@ function parseWorkbook(filePath) {
             categoryKey: slug(section.label),
             categoryLabel: section.label,
             mode: section.label.toLowerCase().includes("medicine") ? "Medicine Ball" : "Bodyweight",
+            modeRaw: section.label,
+            modeGroup: section.label.toLowerCase().includes("medicine") ? "Medicine Ball" : "Bodyweight",
             video: (sheet.cells.get(cellRef(section.col, row)) || {}).hyperlink,
             sourceSheet: sheetInfo.name,
           });
@@ -320,8 +340,8 @@ function parseWorkbook(filePath) {
 
   delete list.idCounts;
   return list.sort((a, b) =>
-    `${a.kind}|${a.categoryLabel}|${a.mode}|${a.name}`.localeCompare(
-      `${b.kind}|${b.categoryLabel}|${b.mode}|${b.name}`,
+    `${a.kind}|${a.categoryLabel}|${a.modeGroup}|${a.name}`.localeCompare(
+      `${b.kind}|${b.categoryLabel}|${b.modeGroup}|${b.name}`,
     ),
   );
 }
@@ -340,6 +360,8 @@ export type Exercise = {
   categoryKey: string;
   categoryLabel: string;
   mode: string;
+  modeRaw: string;
+  modeGroup: string;
   video?: string;
   sourceSheet: string;
   aliases: string[];
@@ -452,7 +474,7 @@ export function findExerciseMatch(
   const pool = categoryKey ? EXERCISES_BY_CATEGORY[categoryKey] || [] : EXERCISES;
 
   return (
-    pool.find((exercise) => exercise.normalizedName === normalizedName && normalizeMode(exercise.mode) === mode) ||
+    pool.find((exercise) => exercise.normalizedName === normalizedName && normalizeMode(exercise.modeGroup) === mode) ||
     pool.find((exercise) => exercise.normalizedName === normalizedName) ||
     EXERCISES.find((exercise) => exercise.normalizedName === normalizedName) ||
     null
@@ -461,7 +483,7 @@ export function findExerciseMatch(
 
 export function getSwapModes(categoryKey: string | null | undefined): string[] {
   if (!categoryKey) return [];
-  const modes = new Set((EXERCISES_BY_CATEGORY[categoryKey] || []).map((exercise) => normalizeMode(exercise.mode)));
+  const modes = new Set((EXERCISES_BY_CATEGORY[categoryKey] || []).map((exercise) => normalizeMode(exercise.modeGroup)));
   return Array.from(modes).sort();
 }
 
@@ -473,7 +495,7 @@ export function getSwapCandidates(
   if (!categoryKey) return [];
   const targetMode = mode ? normalizeMode(mode) : null;
   return (EXERCISES_BY_CATEGORY[categoryKey] || [])
-    .filter((exercise) => !targetMode || normalizeMode(exercise.mode) === targetMode)
+    .filter((exercise) => !targetMode || normalizeMode(exercise.modeGroup) === targetMode)
     .filter((exercise) => !excludeExerciseId || exercise.id !== excludeExerciseId)
     .sort((a, b) => a.name.localeCompare(b.name));
 }

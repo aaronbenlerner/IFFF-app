@@ -57,26 +57,26 @@ export const CATEGORY_LABELS = {
   chest_triceps: "Chest & Triceps",
   back_biceps: "Back & Biceps",
   legs: "Legs",
-  tb_mix: "Total Body â€” Mix",
-  tb_machines: "Total Body â€” Machines",
-  tb_freeweights: "Total Body â€” Free Weights",
-  tb_bodyweight: "Total Body â€” Bodyweight",
-  cardio_12: "Cardio Â· 12 Movements",
-  cardio_4g_kb: "Cardio Â· 4-Group Kettlebell",
-  cardio_4g_mix: "Cardio Â· 4-Group Mixed",
+  tb_mix: "Total Body - Mix",
+  tb_machines: "Total Body - Machines",
+  tb_freeweights: "Total Body - Free Weights",
+  tb_bodyweight: "Total Body - Bodyweight",
+  cardio_12: "Cardio - 12 Movements",
+  cardio_4g_kb: "Cardio - 4-Group Kettlebell",
+  cardio_4g_mix: "Cardio - 4-Group Mixed",
 };
 
 export const CATEGORY_ICONS = {
-  chest_triceps: "ðŸ¤œ",
-  back_biceps: "ðŸ†™",
-  legs: "ðŸ¦µ",
-  tb_mix: "ðŸ”",
-  tb_machines: "âš™ï¸",
-  tb_freeweights: "ðŸ‹ï¸",
-  tb_bodyweight: "ðŸ¤¸",
-  cardio_12: "â¤ï¸â€ðŸ”¥",
-  cardio_4g_kb: "ðŸ””",
-  cardio_4g_mix: "ðŸ«",
+  chest_triceps: "CT",
+  back_biceps: "BB",
+  legs: "LG",
+  tb_mix: "TB",
+  tb_machines: "MC",
+  tb_freeweights: "FW",
+  tb_bodyweight: "BW",
+  cardio_12: "C12",
+  cardio_4g_kb: "KB",
+  cardio_4g_mix: "MX",
 };
 
 // ============================================================
@@ -97,17 +97,17 @@ export const SCHEDULE = {
     { kind: "strength", title: "Legs", categories: ["legs"] },
     { kind: "cardio", title: "Cardio (or rest)", categories: ALL_CARDIO, optional: true },
     { kind: "strength", title: "Total Body", categories: ALL_TB, picker: "rotate" },
-    { kind: "cardio", title: "Cardio Â· High Intensity", categories: ALL_CARDIO },
-    { kind: "outdoor", title: "Bike Â· Run Â· Swim", categories: [], optional: true },
+    { kind: "cardio", title: "Cardio - High Intensity", categories: ALL_CARDIO },
+    { kind: "outdoor", title: "Bike - Run - Swim", categories: [], optional: true },
   ],
   B: [
-    { kind: "strength", title: "Total Body â€” Machines", categories: ["tb_machines"] },
+    { kind: "strength", title: "Total Body - Machines", categories: ["tb_machines"] },
     { kind: "cardio", title: "Cardio", categories: ALL_CARDIO },
-    { kind: "strength", title: "Total Body â€” Free Weights", categories: ["tb_freeweights"] },
+    { kind: "strength", title: "Total Body - Free Weights", categories: ["tb_freeweights"] },
     { kind: "cardio", title: "Cardio (or rest)", categories: ALL_CARDIO, optional: true },
-    { kind: "strength", title: "Total Body â€” Bodyweight", categories: ["tb_bodyweight"] },
-    { kind: "cardio", title: "Cardio Â· High Intensity", categories: ALL_CARDIO },
-    { kind: "outdoor", title: "Bike Â· Run Â· Swim", categories: [], optional: true },
+    { kind: "strength", title: "Total Body - Bodyweight", categories: ["tb_bodyweight"] },
+    { kind: "cardio", title: "Cardio - High Intensity", categories: ALL_CARDIO },
+    { kind: "outdoor", title: "Bike - Run - Swim", categories: [], optional: true },
   ],
 };
 
@@ -146,19 +146,19 @@ export function daysAgo(ts) {
 
 export function previewLine(w) {
   if (w.type === "strength_split") {
-    const exs = w.groups.map(g => g.exercise.split("â€”")[0].trim()).slice(0, 3);
-    return exs.join(" Â· ");
+    const exs = w.groups.map(g => g.exercise.split(" - ")[0].trim()).slice(0, 3);
+    return exs.join(" - ");
   }
   if (w.type === "strength_total_body") {
-    const exs = w.pattern1.map(r => r.exercise.split("â€”")[0].trim()).slice(0, 3);
-    return `${w.template || ""}${exs.length ? " Â· " + exs.join(" Â· ") : ""}`;
+    const exs = w.pattern1.map(r => r.exercise.split(" - ")[0].trim()).slice(0, 3);
+    return `${w.template || ""}${exs.length ? " - " + exs.join(" - ") : ""}`;
   }
   if (w.type === "cardio_12") {
-    return `30 on / 10 off Â· ${w.exercises.length} movements`;
+    return `30 on / 10 off - ${w.exercises.length} movements`;
   }
   if (w.type === "cardio_4group") {
     const totalEx = Object.values(w.groups).reduce((s, g) => s + g.length, 0);
-    return `4 groups Â· ${totalEx} exercises Â· 30/10`;
+    return `4 groups - ${totalEx} exercises - 30/10`;
   }
   return "";
 }

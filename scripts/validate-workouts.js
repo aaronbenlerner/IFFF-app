@@ -60,6 +60,8 @@ for (const [index, exercise] of EXERCISES.entries()) {
   if (!exercise.categoryKey) fail(`${exercise.id || `EXERCISES[${index}]`} missing categoryKey`);
   if (!exercise.categoryLabel) fail(`${exercise.id || `EXERCISES[${index}]`} missing categoryLabel`);
   if (!exercise.mode) fail(`${exercise.id || `EXERCISES[${index}]`} missing mode`);
+  if (!exercise.modeRaw) fail(`${exercise.id || `EXERCISES[${index}]`} missing modeRaw`);
+  if (!exercise.modeGroup) fail(`${exercise.id || `EXERCISES[${index}]`} missing modeGroup`);
   if (exercise.id) {
     if (exerciseIds.has(exercise.id)) fail(`duplicate exercise id: ${exercise.id}`);
     exerciseIds.add(exercise.id);
