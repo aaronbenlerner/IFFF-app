@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   Modal,
+  Image,
   Linking,
   AppState,
   StatusBar,
@@ -20,7 +21,12 @@ import {
   ChevronLeft,
   ChevronRight,
   CirclePlay,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipForward,
   Trash2,
+  X,
 } from "lucide-react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
@@ -39,7 +45,6 @@ import {
   flipWeek,
   safeUid,
   daysAgo,
-  previewLine,
   collectKeys,
 } from "./src/workouts";
 import {
@@ -105,7 +110,20 @@ type SwapTarget = {
   modeHint?: string | null;
 };
 
-type SwapFlow = "exercise" | "mode";
+type ActiveVideo = {
+  title: string;
+  url: string;
+};
+
+type IntervalItem = {
+  key: string;
+  label: string;
+  exercise: string;
+  video?: string | null;
+};
+
+type TimerPhase = "work" | "rest";
+type TimerPresetId = "30_10" | "tabata" | "four_by_four" | "custom";
 
 type PickPayload =
   | { kind: "workout"; workoutId: string }
@@ -240,16 +258,80 @@ function ConfirmModal({
 // VIDEO LINK
 // ============================================================
 
-function VideoLink({ url }: { url?: string | null }) {
+function getYouTubeId(url?: string | null) {
+  if (!url) return null;
+  const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{6,})/);
+  return match ? match[1] : null;
+}
+
+function VideoLink({
+  url,
+  title,
+  onSelect,
+}: {
+  url?: string | null;
+  title: string;
+  onSelect?: (video: ActiveVideo) => void;
+}) {
   const open = useCallback(() => {
-    if (url) Linking.openURL(url).catch(() => {});
-  }, [url]);
+    if (!url) return;
+    if (onSelect) onSelect({ title, url });
+    else Linking.openURL(url).catch(() => {});
+  }, [onSelect, title, url]);
   if (!url) return null;
   return (
     <Pressable onPress={open} className="flex-row items-center mt-1">
       <CirclePlay size={12} strokeWidth={2.5} color="#f59e0b" />
       <Text className="text-amber-500 text-[11px] ml-1">Demo</Text>
     </Pressable>
+  );
+}
+
+function VideoPanel({
+  video,
+  onClose,
+}: {
+  video: ActiveVideo | null;
+  onClose: () => void;
+}) {
+  if (!video) return null;
+  const id = getYouTubeId(video.url);
+  const thumbnail = id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+  return (
+    <View className="bg-zinc-950 border border-zinc-800 rounded-md overflow-hidden">
+      <View className="flex-row items-center justify-between px-3 py-2 border-b border-zinc-800">
+        <Text className="text-[10px] tracking-[2.5px] text-amber-500 font-mono uppercase">
+          Demo Video
+        </Text>
+        <Pressable onPress={onClose} className="p-1">
+          <X size={14} color="#a1a1aa" />
+        </Pressable>
+      </View>
+      <Pressable
+        onPress={() => Linking.openURL(video.url).catch(() => {})}
+        className="flex-row p-3 items-center"
+      >
+        {thumbnail ? (
+          <Image
+            source={{ uri: thumbnail }}
+            className="w-28 h-16 rounded bg-zinc-900"
+            resizeMode="cover"
+          />
+        ) : (
+          <View className="w-28 h-16 rounded bg-zinc-900 items-center justify-center">
+            <CirclePlay size={22} color="#f59e0b" />
+          </View>
+        )}
+        <View className="flex-1 ml-3">
+          <Text className="text-white text-sm font-bold" numberOfLines={2}>
+            {video.title}
+          </Text>
+          <Text className="text-zinc-500 text-[11px] mt-1">
+            Tap to open YouTube
+          </Text>
+        </View>
+      </Pressable>
+    </View>
   );
 }
 
@@ -263,25 +345,33 @@ function ExerciseRow({
   sub,
   meta,
   done,
+  active,
   onToggle,
   swapped,
-  onSwapExercise,
-  onSwapMode,
+  onVideoSelect,
+  onSwap,
 }: {
   exercise: string;
   video?: string | null;
   sub?: string | null;
   meta?: string | null;
   done: boolean;
+  active?: boolean;
   onToggle: () => void;
   swapped?: boolean;
-  onSwapExercise?: () => void;
-  onSwapMode?: () => void;
+  onVideoSelect?: (video: ActiveVideo) => void;
+  onSwap?: () => void;
 }) {
   return (
     <Pressable
       onPress={onToggle}
-      className={`rounded-md p-3 border ${done ? "bg-emerald-950/40 border-emerald-700" : "bg-zinc-900 border-zinc-800"}`}
+      className={`rounded-md p-3 border ${
+        active
+          ? "bg-amber-500/15 border-amber-500"
+          : done
+            ? "bg-emerald-950/40 border-emerald-700"
+            : "bg-zinc-900 border-zinc-800"
+      }`}
     >
       <View className="flex-row items-start">
         <View
@@ -304,36 +394,19 @@ function ExerciseRow({
             <Text className="text-[11px] font-mono text-amber-500 mt-0.5">{meta}</Text>
           ) : null}
           <View className="flex-row items-center justify-between mt-1">
-            <VideoLink url={video} />
-            {onSwapExercise || onSwapMode ? (
-              <View className="flex-row gap-1">
-                {onSwapExercise ? (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      onSwapExercise();
-                    }}
-                    className={`px-2 py-1 rounded border ${swapped ? "border-amber-500 bg-amber-500/10" : "border-zinc-700"}`}
-                  >
-                    <Text className={`text-[10px] font-bold uppercase tracking-wider ${swapped ? "text-amber-500" : "text-zinc-300"}`}>
-                      Swap Exercise
-                    </Text>
-                  </Pressable>
-                ) : null}
-                {onSwapMode ? (
-                  <Pressable
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      onSwapMode();
-                    }}
-                    className="px-2 py-1 rounded border border-zinc-700"
-                  >
-                    <Text className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
-                      Swap Mode
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </View>
+            <VideoLink url={video} title={exercise} onSelect={onVideoSelect} />
+            {onSwap ? (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onSwap();
+                }}
+                className={`px-2 py-1 rounded border ${swapped ? "border-amber-500 bg-amber-500/10" : "border-zinc-700"}`}
+              >
+                <Text className={`text-[10px] font-bold uppercase tracking-wider ${swapped ? "text-amber-500" : "text-zinc-300"}`}>
+                  Swap
+                </Text>
+              </Pressable>
             ) : null}
           </View>
         </View>
@@ -356,9 +429,22 @@ function applySubstitution(
   };
 }
 
+function formatClock(seconds: number) {
+  const safe = Math.max(0, Math.floor(seconds));
+  const mins = Math.floor(safe / 60);
+  const secs = safe % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+const TIMER_PRESETS: Record<TimerPresetId, { label: string; work: number; rest: number }> = {
+  "30_10": { label: "30/10", work: 30, rest: 10 },
+  tabata: { label: "Tabata", work: 20, rest: 10 },
+  four_by_four: { label: "4x4", work: 240, rest: 60 },
+  custom: { label: "Custom", work: 30, rest: 10 },
+};
+
 function SwapModal({
   target,
-  flow,
   selectedMode,
   substitutions,
   onModeChange,
@@ -367,7 +453,6 @@ function SwapModal({
   onClose,
 }: {
   target: SwapTarget | null;
-  flow: SwapFlow | null;
   selectedMode: string | null;
   substitutions: Record<string, Substitution>;
   onModeChange: (mode: string) => void;
@@ -375,6 +460,12 @@ function SwapModal({
   onClear: () => void;
   onClose: () => void;
 }) {
+  const [pendingExercise, setPendingExercise] = useState<Exercise | null>(null);
+
+  useEffect(() => {
+    setPendingExercise(null);
+  }, [target?.slotKey, selectedMode]);
+
   if (!target) return null;
 
   const categoryKey = inferExerciseCategoryKey(target.categoryHint, target.exercise);
@@ -382,13 +473,11 @@ function SwapModal({
   const currentSubstitution = substitutions[target.slotKey];
   const originalMode = normalizeMode(target.modeHint || original?.modeGroup || original?.mode);
   const activeMode = normalizeMode(currentSubstitution?.modeGroup || currentSubstitution?.mode || originalMode);
-  const currentMode =
-    flow === "exercise"
-      ? activeMode
-      : selectedMode || normalizeMode(currentSubstitution?.modeGroup || currentSubstitution?.mode || target.modeHint || original?.modeGroup || original?.mode);
+  const currentMode = selectedMode || activeMode;
   const modes = getSwapModes(categoryKey);
   const candidates = getSwapCandidates(categoryKey, currentMode, currentSubstitution?.exerciseId || original?.id);
   const sameMode = originalMode === currentMode;
+  const replacementName = pendingExercise?.name || currentSubstitution?.exerciseName || "Original exercise";
 
   return (
     <Modal transparent visible animationType="slide" onRequestClose={onClose}>
@@ -396,18 +485,14 @@ function SwapModal({
         <View className="bg-zinc-950 border-t border-zinc-800 rounded-t-lg max-h-[86%]">
           <View className="p-4 border-b border-zinc-800">
             <Text className="text-[10px] tracking-[2.5px] text-amber-500 font-mono uppercase">
-              {flow === "mode" ? "Swap Mode" : "Swap Exercise"}
+              Swap Exercise
             </Text>
             <Text className="text-white text-lg font-bold mt-1" numberOfLines={2}>
-              {currentSubstitution?.exerciseName || target.exercise}
+              {target.exercise}
             </Text>
             <Text className="text-zinc-500 text-[11px] mt-1">
               {categoryKey
-                ? flow === "exercise"
-                  ? `Keeping ${currentMode}`
-                  : sameMode
-                    ? `Current mode: ${currentMode}`
-                    : `Changing to ${currentMode}`
+                ? `${sameMode ? "Current mode" : "Changing to"}: ${currentMode} - Replacement: ${replacementName}`
                 : "No master-list category match found"}
             </Text>
           </View>
@@ -429,7 +514,6 @@ function SwapModal({
             </View>
           ) : (
             <>
-              {flow === "mode" ? (
               <View className="p-4 border-b border-zinc-900">
                 <Text className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider mb-2">
                   Equipment Mode
@@ -455,7 +539,6 @@ function SwapModal({
                   </View>
                 </ScrollView>
               </View>
-              ) : null}
 
               <ScrollView contentContainerClassName="p-4 gap-2">
                 {candidates.length === 0 ? (
@@ -466,22 +549,32 @@ function SwapModal({
                   candidates.map((exercise) => (
                     <Pressable
                       key={exercise.id}
-                      onPress={() => onPick(exercise)}
-                      className="bg-zinc-900 border border-zinc-800 rounded-md p-3"
+                      onPress={() => setPendingExercise(exercise)}
+                      className={`rounded-md p-3 border ${pendingExercise?.id === exercise.id ? "bg-amber-500/10 border-amber-500" : "bg-zinc-900 border-zinc-800"}`}
                     >
-                      <Text className="text-white font-bold text-sm">
+                      <Text className={`font-bold text-sm ${pendingExercise?.id === exercise.id ? "text-amber-500" : "text-white"}`}>
                         {exercise.name}
                       </Text>
                       <Text className="text-[11px] text-zinc-500 mt-0.5">
                         {exercise.categoryLabel} - {exercise.modeGroup}
                       </Text>
-                      <VideoLink url={exercise.video} />
+                      <VideoLink url={exercise.video} title={exercise.name} />
                     </Pressable>
                   ))
                 )}
               </ScrollView>
 
-              <View className="p-4 border-t border-zinc-800 flex-row gap-2">
+              <View className="p-4 border-t border-zinc-800 gap-2">
+                <Pressable
+                  onPress={() => pendingExercise && onPick(pendingExercise)}
+                  disabled={!pendingExercise}
+                  className={`py-3 rounded-md items-center ${pendingExercise ? "bg-amber-500" : "bg-zinc-900 border border-zinc-800"}`}
+                >
+                  <Text className={`text-xs font-black uppercase tracking-wider ${pendingExercise ? "text-black" : "text-zinc-600"}`}>
+                    Use Exercise
+                  </Text>
+                </Pressable>
+                <View className="flex-row gap-2">
                 <Pressable
                   onPress={onClose}
                   className="flex-1 bg-zinc-900 border border-zinc-800 py-3 rounded-md items-center"
@@ -501,6 +594,7 @@ function SwapModal({
                     Reset Slot
                   </Text>
                 </Pressable>
+                </View>
               </View>
             </>
           )}
@@ -520,12 +614,14 @@ function SplitView({
   toggle,
   substitutions,
   onSwap,
+  onVideoSelect,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
   substitutions: Record<string, Substitution>;
-  onSwap: (target: SwapTarget, flow: SwapFlow) => void;
+  onSwap: (target: SwapTarget) => void;
+  onVideoSelect: (video: ActiveVideo) => void;
 }) {
   return (
     <View className="gap-2">
@@ -541,23 +637,15 @@ function SplitView({
             done={isDone(`g${i}`)}
             onToggle={() => toggle(`g${i}`)}
             swapped={!!substitutions[`g${i}`]}
-            onSwapExercise={() =>
+            onVideoSelect={onVideoSelect}
+            onSwap={() =>
               onSwap({
                 slotKey: `g${i}`,
                 exercise: g.exercise,
                 video: g.video,
                 categoryHint: g.movement,
                 modeHint: g.mode,
-              }, "exercise")
-            }
-            onSwapMode={() =>
-              onSwap({
-                slotKey: `g${i}`,
-                exercise: g.exercise,
-                video: g.video,
-                categoryHint: g.movement,
-                modeHint: g.mode,
-              }, "mode")
+              })
             }
           />
         );
@@ -574,6 +662,7 @@ function PatternBlock({
   toggle,
   substitutions,
   onSwap,
+  onVideoSelect,
 }: {
   title: string;
   rows: any[];
@@ -581,7 +670,8 @@ function PatternBlock({
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
   substitutions: Record<string, Substitution>;
-  onSwap: (target: SwapTarget, flow: SwapFlow) => void;
+  onSwap: (target: SwapTarget) => void;
+  onVideoSelect: (video: ActiveVideo) => void;
 }) {
   if (!rows.length) return null;
   return (
@@ -600,23 +690,15 @@ function PatternBlock({
             done={isDone(`${prefix}_${i}`)}
             onToggle={() => toggle(`${prefix}_${i}`)}
             swapped={!!substitutions[`${prefix}_${i}`]}
-            onSwapExercise={() =>
+            onVideoSelect={onVideoSelect}
+            onSwap={() =>
               onSwap({
                 slotKey: `${prefix}_${i}`,
                 exercise: r.exercise,
                 video: r.video,
                 categoryHint: r.movement,
                 modeHint: r.track,
-              }, "exercise")
-            }
-            onSwapMode={() =>
-              onSwap({
-                slotKey: `${prefix}_${i}`,
-                exercise: r.exercise,
-                video: r.video,
-                categoryHint: r.movement,
-                modeHint: r.track,
-              }, "mode")
+              })
             }
           />
         ))}
@@ -631,12 +713,14 @@ function TotalBodyView({
   toggle,
   substitutions,
   onSwap,
+  onVideoSelect,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
   substitutions: Record<string, Substitution>;
-  onSwap: (target: SwapTarget, flow: SwapFlow) => void;
+  onSwap: (target: SwapTarget) => void;
+  onVideoSelect: (video: ActiveVideo) => void;
 }) {
   return (
     <View className="gap-4">
@@ -648,6 +732,7 @@ function TotalBodyView({
         toggle={toggle}
         substitutions={substitutions}
         onSwap={onSwap}
+        onVideoSelect={onVideoSelect}
       />
       <PatternBlock
         title="Pattern 2 - Repeat 3-5 Rounds"
@@ -657,6 +742,7 @@ function TotalBodyView({
         toggle={toggle}
         substitutions={substitutions}
         onSwap={onSwap}
+        onVideoSelect={onVideoSelect}
       />
       <PatternBlock
         title="Pattern 3 - Isolation - Repeat 1-3 Rounds"
@@ -666,6 +752,7 @@ function TotalBodyView({
         toggle={toggle}
         substitutions={substitutions}
         onSwap={onSwap}
+        onVideoSelect={onVideoSelect}
       />
     </View>
   );
@@ -677,12 +764,16 @@ function Cardio12View({
   toggle,
   substitutions,
   onSwap,
+  onVideoSelect,
+  activeKey,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
   substitutions: Record<string, Substitution>;
-  onSwap: (target: SwapTarget, flow: SwapFlow) => void;
+  onSwap: (target: SwapTarget) => void;
+  onVideoSelect: (video: ActiveVideo) => void;
+  activeKey?: string | null;
 }) {
   return (
     <View className="gap-2">
@@ -701,25 +792,18 @@ function Cardio12View({
           exercise={applySubstitution(`x_${i}`, { exercise: e.exercise, video: e.video }, substitutions).exercise}
           video={applySubstitution(`x_${i}`, { exercise: e.exercise, video: e.video }, substitutions).video}
           done={isDone(`x_${i}`)}
+          active={activeKey === `x_${i}`}
           onToggle={() => toggle(`x_${i}`)}
           swapped={!!substitutions[`x_${i}`]}
-          onSwapExercise={() =>
+          onVideoSelect={onVideoSelect}
+          onSwap={() =>
             onSwap({
               slotKey: `x_${i}`,
               exercise: e.exercise,
               video: e.video,
               categoryHint: e.movement,
               modeHint: e.movement,
-            }, "exercise")
-          }
-          onSwapMode={() =>
-            onSwap({
-              slotKey: `x_${i}`,
-              exercise: e.exercise,
-              video: e.video,
-              categoryHint: e.movement,
-              modeHint: e.movement,
-            }, "mode")
+            })
           }
         />
       ))}
@@ -733,12 +817,16 @@ function Cardio4GView({
   toggle,
   substitutions,
   onSwap,
+  onVideoSelect,
+  activeKey,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
   substitutions: Record<string, Substitution>;
-  onSwap: (target: SwapTarget, flow: SwapFlow) => void;
+  onSwap: (target: SwapTarget) => void;
+  onVideoSelect: (video: ActiveVideo) => void;
+  activeKey?: string | null;
 }) {
   return (
     <View className="gap-4">
@@ -763,25 +851,18 @@ function Cardio4GView({
                 exercise={applySubstitution(`G${letter}_${i}`, { exercise: it.exercise, video: it.video }, substitutions).exercise}
                 video={applySubstitution(`G${letter}_${i}`, { exercise: it.exercise, video: it.video }, substitutions).video}
                 done={isDone(`G${letter}_${i}`)}
+                active={activeKey === `G${letter}_${i}`}
                 onToggle={() => toggle(`G${letter}_${i}`)}
                 swapped={!!substitutions[`G${letter}_${i}`]}
-                onSwapExercise={() =>
+                onVideoSelect={onVideoSelect}
+                onSwap={() =>
                   onSwap({
                     slotKey: `G${letter}_${i}`,
                     exercise: it.exercise,
                     video: it.video,
                     categoryHint: it.equipment,
                     modeHint: it.equipment,
-                  }, "exercise")
-                }
-                onSwapMode={() =>
-                  onSwap({
-                    slotKey: `G${letter}_${i}`,
-                    exercise: it.exercise,
-                    video: it.video,
-                    categoryHint: it.equipment,
-                    modeHint: it.equipment,
-                  }, "mode")
+                  })
                 }
               />
             ))}
@@ -798,12 +879,14 @@ function ExtrasView({
   toggle,
   substitutions,
   onSwap,
+  onVideoSelect,
 }: {
   w: any;
   isDone: (k: string) => boolean;
   toggle: (k: string) => void;
   substitutions: Record<string, Substitution>;
-  onSwap: (target: SwapTarget, flow: SwapFlow) => void;
+  onSwap: (target: SwapTarget) => void;
+  onVideoSelect: (video: ActiveVideo) => void;
 }) {
   if (w.abs.length === 0 && w.finisher.length === 0 && w.steady.length === 0)
     return null;
@@ -824,23 +907,15 @@ function ExtrasView({
                 done={isDone(`A_${i}`)}
                 onToggle={() => toggle(`A_${i}`)}
                 swapped={!!substitutions[`A_${i}`]}
-                onSwapExercise={() =>
+                onVideoSelect={onVideoSelect}
+                onSwap={() =>
                   onSwap({
                     slotKey: `A_${i}`,
                     exercise: a.exercise,
                     video: a.video,
                     categoryHint: "Abs",
                     modeHint: a.exercise,
-                  }, "exercise")
-                }
-                onSwapMode={() =>
-                  onSwap({
-                    slotKey: `A_${i}`,
-                    exercise: a.exercise,
-                    video: a.video,
-                    categoryHint: "Abs",
-                    modeHint: a.exercise,
-                  }, "mode")
+                  })
                 }
               />
             ))}
@@ -861,23 +936,15 @@ function ExtrasView({
                 done={isDone(`F_${i}`)}
                 onToggle={() => toggle(`F_${i}`)}
                 swapped={!!substitutions[`F_${i}`]}
-                onSwapExercise={() =>
+                onVideoSelect={onVideoSelect}
+                onSwap={() =>
                   onSwap({
                     slotKey: `F_${i}`,
                     exercise: a.exercise,
                     video: a.video,
                     categoryHint: a.exercise,
                     modeHint: a.exercise,
-                  }, "exercise")
-                }
-                onSwapMode={() =>
-                  onSwap({
-                    slotKey: `F_${i}`,
-                    exercise: a.exercise,
-                    video: a.video,
-                    categoryHint: a.exercise,
-                    modeHint: a.exercise,
-                  }, "mode")
+                  })
                 }
               />
             ))}
@@ -898,23 +965,15 @@ function ExtrasView({
                 done={isDone(`S_${i}`)}
                 onToggle={() => toggle(`S_${i}`)}
                 swapped={!!substitutions[`S_${i}`]}
-                onSwapExercise={() =>
+                onVideoSelect={onVideoSelect}
+                onSwap={() =>
                   onSwap({
                     slotKey: `S_${i}`,
                     exercise: a.exercise,
                     video: a.video,
                     categoryHint: a.exercise,
                     modeHint: a.exercise,
-                  }, "exercise")
-                }
-                onSwapMode={() =>
-                  onSwap({
-                    slotKey: `S_${i}`,
-                    exercise: a.exercise,
-                    video: a.video,
-                    categoryHint: a.exercise,
-                    modeHint: a.exercise,
-                  }, "mode")
+                  })
                 }
               />
             ))}
@@ -928,6 +987,31 @@ function ExtrasView({
 // ============================================================
 // TODAY SCREEN
 // ============================================================
+
+function workoutExercisePreview(w: any) {
+  if (w.type === "strength_split") {
+    return (w.groups || []).map((g: any) => g.exercise).filter(Boolean).join(" - ");
+  }
+  if (w.type === "strength_total_body") {
+    return [...(w.pattern1 || []), ...(w.pattern2 || []), ...(w.pattern3 || [])]
+      .map((r: any) => r.exercise)
+      .filter(Boolean)
+      .join(" - ");
+  }
+  if (w.type === "cardio_12") {
+    return (w.exercises || []).map((e: any) => e.exercise).filter(Boolean).join(" - ");
+  }
+  if (w.type === "cardio_4group") {
+    const names: string[] = [];
+    for (const letter of ["A", "B", "C", "D"] as const) {
+      for (const item of (w.groups?.[letter] || [])) {
+        if (item.exercise) names.push(item.exercise);
+      }
+    }
+    return names.join(" - ");
+  }
+  return "";
+}
 
 function TodayScreen({
   week,
@@ -1015,7 +1099,7 @@ function TodayScreen({
                   className="bg-zinc-900 border border-zinc-800 rounded-md p-3 flex-row items-center"
                 >
                   <Text className="text-2xl mr-3">
-                    {(CATEGORY_ICONS as any)[w.category] || "💪"}
+                    {(CATEGORY_ICONS as any)[w.category] || "IFFF"}
                   </Text>
                   <View className="flex-1">
                     <Text
@@ -1025,10 +1109,10 @@ function TodayScreen({
                       {w.name}
                     </Text>
                     <Text
-                      className="text-zinc-500 text-[11px]"
-                      numberOfLines={1}
+                      className="text-zinc-500 text-[11px] leading-4 mt-0.5"
+                      numberOfLines={2}
                     >
-                      {previewLine(w)}
+                      {workoutExercisePreview(w)}
                     </Text>
                   </View>
                   {last ? (
@@ -1051,6 +1135,153 @@ function TodayScreen({
 // WORKOUT SCREEN
 // ============================================================
 
+function IntervalTimerPanel({
+  items,
+  presetId,
+  workSeconds,
+  restSeconds,
+  phase,
+  currentIndex,
+  secondsLeft,
+  elapsed,
+  running,
+  onPresetChange,
+  onWorkChange,
+  onRestChange,
+  onToggleRun,
+  onSkip,
+  onReset,
+  onVideoSelect,
+}: {
+  items: IntervalItem[];
+  presetId: TimerPresetId;
+  workSeconds: number;
+  restSeconds: number;
+  phase: TimerPhase;
+  currentIndex: number;
+  secondsLeft: number;
+  elapsed: number;
+  running: boolean;
+  onPresetChange: (id: TimerPresetId) => void;
+  onWorkChange: (seconds: number) => void;
+  onRestChange: (seconds: number) => void;
+  onToggleRun: () => void;
+  onSkip: () => void;
+  onReset: () => void;
+  onVideoSelect: (video: ActiveVideo) => void;
+}) {
+  if (!items.length) return null;
+  const current = items[Math.min(currentIndex, items.length - 1)];
+  const next = items[(currentIndex + 1) % items.length];
+  const phaseClass = phase === "work" ? "bg-emerald-500" : "bg-red-500";
+  return (
+    <View className="bg-zinc-950 border border-zinc-800 rounded-md overflow-hidden">
+      <View className={`${phaseClass} p-4`}>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-black text-[10px] font-black uppercase tracking-[2px]">
+            {phase}
+          </Text>
+          <Text className="text-black text-[10px] font-bold uppercase tracking-wider">
+            {currentIndex + 1}/{items.length} - {formatClock(elapsed)}
+          </Text>
+        </View>
+        <Text className="text-black text-5xl font-archivo mt-1">
+          {formatClock(secondsLeft)}
+        </Text>
+        <Text className="text-black text-base font-black mt-1" numberOfLines={2}>
+          {current.exercise}
+        </Text>
+        <Text className="text-black/70 text-[11px] font-bold uppercase mt-1" numberOfLines={1}>
+          Next: {next.exercise}
+        </Text>
+        {current.video ? (
+          <Pressable
+            onPress={() => onVideoSelect({ title: current.exercise, url: current.video || "" })}
+            className="self-start bg-black/15 px-3 py-1.5 rounded-md mt-3 flex-row items-center"
+          >
+            <CirclePlay size={13} color="#000" />
+            <Text className="text-black text-[10px] font-black uppercase tracking-wider ml-1">
+              Demo
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <View className="p-3 gap-3">
+        <View className="flex-row gap-2">
+          {(Object.keys(TIMER_PRESETS) as TimerPresetId[]).map((id) => {
+            const active = presetId === id;
+            return (
+              <Pressable
+                key={id}
+                onPress={() => onPresetChange(id)}
+                className={`flex-1 py-2 rounded-md items-center border ${active ? "bg-amber-500 border-amber-500" : "bg-zinc-900 border-zinc-800"}`}
+              >
+                <Text className={`text-[10px] font-bold uppercase ${active ? "text-black" : "text-zinc-400"}`}>
+                  {TIMER_PRESETS[id].label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {presetId === "custom" ? (
+          <View className="flex-row gap-2">
+            <View className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2">
+              <Text className="text-[9px] text-zinc-500 font-mono uppercase">Work</Text>
+              <View className="flex-row items-center justify-between mt-1">
+                <Pressable onPress={() => onWorkChange(Math.max(5, workSeconds - 5))} className="px-3 py-1 rounded bg-zinc-800">
+                  <Text className="text-white font-bold">-</Text>
+                </Pressable>
+                <Text className="text-white font-mono text-sm">{workSeconds}s</Text>
+                <Pressable onPress={() => onWorkChange(workSeconds + 5)} className="px-3 py-1 rounded bg-zinc-800">
+                  <Text className="text-white font-bold">+</Text>
+                </Pressable>
+              </View>
+            </View>
+            <View className="flex-1 bg-zinc-900 border border-zinc-800 rounded-md p-2">
+              <Text className="text-[9px] text-zinc-500 font-mono uppercase">Rest</Text>
+              <View className="flex-row items-center justify-between mt-1">
+                <Pressable onPress={() => onRestChange(Math.max(0, restSeconds - 5))} className="px-3 py-1 rounded bg-zinc-800">
+                  <Text className="text-white font-bold">-</Text>
+                </Pressable>
+                <Text className="text-white font-mono text-sm">{restSeconds}s</Text>
+                <Pressable onPress={() => onRestChange(restSeconds + 5)} className="px-3 py-1 rounded bg-zinc-800">
+                  <Text className="text-white font-bold">+</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={onToggleRun}
+            className="flex-1 bg-amber-500 py-3 rounded-md flex-row items-center justify-center"
+          >
+            {running ? <Pause size={15} color="#000" /> : <Play size={15} color="#000" />}
+            <Text className="text-black text-xs font-black uppercase tracking-wider ml-2">
+              {running ? "Pause" : "Start"}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={onSkip}
+            className="bg-zinc-900 border border-zinc-800 px-4 rounded-md items-center justify-center"
+          >
+            <SkipForward size={16} color="#d4d4d8" />
+          </Pressable>
+          <Pressable
+            onPress={onReset}
+            className="bg-zinc-900 border border-zinc-800 px-4 rounded-md items-center justify-center"
+          >
+            <RotateCcw size={16} color="#d4d4d8" />
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function WorkoutScreen({
   workout,
   state,
@@ -1070,8 +1301,16 @@ function WorkoutScreen({
 }) {
   const w = workout;
   const [swapTarget, setSwapTarget] = useState<SwapTarget | null>(null);
-  const [swapFlow, setSwapFlow] = useState<SwapFlow | null>(null);
   const [swapMode, setSwapMode] = useState<string | null>(null);
+  const [activeVideo, setActiveVideo] = useState<ActiveVideo | null>(null);
+  const [timerPreset, setTimerPreset] = useState<TimerPresetId>("30_10");
+  const [customWork, setCustomWork] = useState(30);
+  const [customRest, setCustomRest] = useState(10);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerPhase, setTimerPhase] = useState<TimerPhase>("work");
+  const [timerIndex, setTimerIndex] = useState(0);
+  const [timerSecondsLeft, setTimerSecondsLeft] = useState(30);
+  const [timerElapsed, setTimerElapsed] = useState(0);
   const askConfirm = state.confirm;
   const setAskConfirm = (v: ActiveState["confirm"]) =>
     setState((s) => ({ ...s, confirm: v }));
@@ -1088,18 +1327,104 @@ function WorkoutScreen({
 
   const totalKeys = collectKeys(w);
   const doneCount = totalKeys.filter((k: string) => isDone(k)).length;
+  const isIntervalWorkout = w.type === "cardio_12" || w.type === "cardio_4group";
+  const workSeconds = timerPreset === "custom" ? customWork : TIMER_PRESETS[timerPreset].work;
+  const restSeconds = timerPreset === "custom" ? customRest : TIMER_PRESETS[timerPreset].rest;
 
-  const openSwap = (target: SwapTarget, flow: SwapFlow) => {
+  const intervalItems = useMemo<IntervalItem[]>(() => {
+    if (w.type === "cardio_12") {
+      return w.exercises.map((e: any, i: number) => {
+        const slotKey = `x_${i}`;
+        const applied = applySubstitution(slotKey, { exercise: e.exercise, video: e.video }, substitutions);
+        return {
+          key: slotKey,
+          label: `${(i + 1).toString().padStart(2, "0")} - ${e.movement || ""}`,
+          exercise: applied.exercise,
+          video: applied.video,
+        };
+      });
+    }
+    if (w.type === "cardio_4group") {
+      const out: IntervalItem[] = [];
+      for (const letter of ["A", "B", "C", "D"] as const) {
+        w.groups[letter].forEach((it: any, i: number) => {
+          const slotKey = `G${letter}_${i}`;
+          const applied = applySubstitution(slotKey, { exercise: it.exercise, video: it.video }, substitutions);
+          out.push({
+            key: slotKey,
+            label: `Group ${letter} - ${i + 1}`,
+            exercise: applied.exercise,
+            video: applied.video,
+          });
+        });
+      }
+      return out;
+    }
+    return [];
+  }, [substitutions, w]);
+
+  const activeIntervalKey = isIntervalWorkout && intervalItems.length
+    ? intervalItems[Math.min(timerIndex, intervalItems.length - 1)]?.key
+    : null;
+
+  const markDone = useCallback((key: string) => {
+    setState((s) => {
+      if (s.done[key]) return s;
+      return { ...s, done: { ...s.done, [key]: Date.now() } };
+    });
+  }, [setState]);
+
+  const advanceTimer = useCallback(() => {
+    if (!intervalItems.length) return;
+    const current = intervalItems[Math.min(timerIndex, intervalItems.length - 1)];
+    if (timerPhase === "work") {
+      markDone(current.key);
+      if (restSeconds > 0) {
+        setTimerPhase("rest");
+        setTimerSecondsLeft(restSeconds);
+        return;
+      }
+    }
+    const nextIndex = timerIndex + 1;
+    if (nextIndex >= intervalItems.length) {
+      setTimerRunning(false);
+      setTimerIndex(0);
+      setTimerPhase("work");
+      setTimerSecondsLeft(workSeconds);
+      return;
+    }
+    setTimerIndex(nextIndex);
+    setTimerPhase("work");
+    setTimerSecondsLeft(workSeconds);
+  }, [intervalItems, markDone, restSeconds, timerIndex, timerPhase, workSeconds]);
+
+  useEffect(() => {
+    setTimerRunning(false);
+    setTimerPhase("work");
+    setTimerIndex(0);
+    setTimerSecondsLeft(workSeconds);
+    setTimerElapsed(0);
+  }, [w.id, workSeconds, restSeconds]);
+
+  useEffect(() => {
+    if (!timerRunning || !isIntervalWorkout || !intervalItems.length) return;
+    const id = setInterval(() => {
+      setTimerElapsed((value) => value + 1);
+      setTimerSecondsLeft((value) => value - 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [intervalItems.length, isIntervalWorkout, timerRunning]);
+
+  useEffect(() => {
+    if (timerRunning && timerSecondsLeft <= 0) advanceTimer();
+  }, [advanceTimer, timerRunning, timerSecondsLeft]);
+
+  const openSwap = (target: SwapTarget) => {
     const existing = substitutions[target.slotKey];
     const original = findExerciseMatch(target.exercise, target.categoryHint, target.modeHint);
     const originalMode = normalizeMode(target.modeHint || original?.modeGroup || original?.mode);
     setSwapTarget(target);
-    setSwapFlow(flow);
-    setSwapMode(
-      flow === "exercise"
-        ? originalMode
-        : normalizeMode(existing?.modeGroup || existing?.mode || originalMode),
-    );
+    setSwapMode(normalizeMode(existing?.modeGroup || existing?.mode || originalMode));
   };
 
   const pickSwap = (exercise: Exercise) => {
@@ -1130,7 +1455,6 @@ function WorkoutScreen({
       },
     }));
     setSwapTarget(null);
-    setSwapFlow(null);
     setSwapMode(null);
   };
 
@@ -1142,8 +1466,40 @@ function WorkoutScreen({
       return next;
     });
     setSwapTarget(null);
-    setSwapFlow(null);
     setSwapMode(null);
+  };
+
+  const resetTimer = () => {
+    setTimerRunning(false);
+    setTimerPhase("work");
+    setTimerIndex(0);
+    setTimerSecondsLeft(workSeconds);
+    setTimerElapsed(0);
+  };
+
+  const choosePreset = (id: TimerPresetId) => {
+    setTimerPreset(id);
+    setTimerRunning(false);
+    setTimerPhase("work");
+    setTimerIndex(0);
+    setTimerSecondsLeft(id === "custom" ? customWork : TIMER_PRESETS[id].work);
+    setTimerElapsed(0);
+  };
+
+  const changeCustomWork = (seconds: number) => {
+    setCustomWork(seconds);
+    if (timerPreset === "custom" && timerPhase === "work") {
+      setTimerRunning(false);
+      setTimerSecondsLeft(seconds);
+    }
+  };
+
+  const changeCustomRest = (seconds: number) => {
+    setCustomRest(seconds);
+    if (timerPreset === "custom" && timerPhase === "rest") {
+      setTimerRunning(false);
+      setTimerSecondsLeft(seconds);
+    }
   };
 
   return (
@@ -1175,6 +1531,29 @@ function WorkoutScreen({
         ) : null}
       </View>
 
+      {isIntervalWorkout ? (
+        <IntervalTimerPanel
+          items={intervalItems}
+          presetId={timerPreset}
+          workSeconds={workSeconds}
+          restSeconds={restSeconds}
+          phase={timerPhase}
+          currentIndex={timerIndex}
+          secondsLeft={timerSecondsLeft}
+          elapsed={timerElapsed}
+          running={timerRunning}
+          onPresetChange={choosePreset}
+          onWorkChange={changeCustomWork}
+          onRestChange={changeCustomRest}
+          onToggleRun={() => setTimerRunning((value) => !value)}
+          onSkip={advanceTimer}
+          onReset={resetTimer}
+          onVideoSelect={setActiveVideo}
+        />
+      ) : null}
+
+      <VideoPanel video={activeVideo} onClose={() => setActiveVideo(null)} />
+
       {w.type === "strength_split" && (
         <SplitView
           w={w}
@@ -1182,6 +1561,7 @@ function WorkoutScreen({
           toggle={toggle}
           substitutions={substitutions}
           onSwap={openSwap}
+          onVideoSelect={setActiveVideo}
         />
       )}
       {w.type === "strength_total_body" && (
@@ -1191,6 +1571,7 @@ function WorkoutScreen({
           toggle={toggle}
           substitutions={substitutions}
           onSwap={openSwap}
+          onVideoSelect={setActiveVideo}
         />
       )}
       {w.type === "cardio_12" && (
@@ -1200,6 +1581,8 @@ function WorkoutScreen({
           toggle={toggle}
           substitutions={substitutions}
           onSwap={openSwap}
+          onVideoSelect={setActiveVideo}
+          activeKey={activeIntervalKey}
         />
       )}
       {w.type === "cardio_4group" && (
@@ -1209,6 +1592,8 @@ function WorkoutScreen({
           toggle={toggle}
           substitutions={substitutions}
           onSwap={openSwap}
+          onVideoSelect={setActiveVideo}
+          activeKey={activeIntervalKey}
         />
       )}
 
@@ -1218,6 +1603,7 @@ function WorkoutScreen({
         toggle={toggle}
         substitutions={substitutions}
         onSwap={openSwap}
+        onVideoSelect={setActiveVideo}
       />
 
       <Pressable
@@ -1243,7 +1629,6 @@ function WorkoutScreen({
       />
       <SwapModal
         target={swapTarget}
-        flow={swapFlow}
         selectedMode={swapMode}
         substitutions={substitutions}
         onModeChange={setSwapMode}
@@ -1251,7 +1636,6 @@ function WorkoutScreen({
         onClear={clearSwap}
         onClose={() => {
           setSwapTarget(null);
-          setSwapFlow(null);
           setSwapMode(null);
         }}
       />
