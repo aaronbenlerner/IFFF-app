@@ -392,7 +392,7 @@ function ExerciseRow({
             </Text>
           ) : null}
           <Text
-            className={`text-sm font-bold ${done ? "text-zinc-400 line-through" : "text-white"}`}
+            className={`text-lg font-bold leading-6 ${done ? "text-zinc-400 line-through" : "text-white"}`}
           >
             {exercise}
           </Text>
@@ -636,7 +636,7 @@ function SplitView({
   return (
     <View className="gap-2">
       {w.groups.map((g: any, i: number) => {
-        const meta = `${g.sets} SETS${g.reps ? " - " + g.reps : ""}${g.mode ? " - " + g.mode : ""}`;
+        const meta = `${g.sets} SETS${g.reps ? " - " + g.reps : ""}`;
         return (
           <ExerciseRow
             key={i}
@@ -1001,13 +1001,13 @@ function ExtrasView({
 function workoutExercisePreviewRows(w: any): { left: string; right?: string }[] {
   if (w.type === "strength_split") {
     return (w.groups || [])
-      .map((g: any) => g.exercise ? { left: g.exercise.toUpperCase() } : null)
+      .map((g: any) => g.exercise ? { left: g.exercise } : null)
       .filter(Boolean)
       .slice(0, 6) as { left: string }[];
   }
   if (w.type === "strength_total_body") {
     return [...(w.pattern1 || []), ...(w.pattern2 || []), ...(w.pattern3 || [])]
-      .map((r: any) => r.exercise ? { left: r.exercise.toUpperCase() } : null)
+      .map((r: any) => r.exercise ? { left: r.exercise } : null)
       .filter(Boolean)
       .slice(0, 6) as { left: string }[];
   }
@@ -1016,15 +1016,15 @@ function workoutExercisePreviewRows(w: any): { left: string; right?: string }[] 
     return Array.from({ length: Math.ceil(exercises.length / 2) })
       .slice(0, 6)
       .map((_, index) => ({
-        left: String(exercises[index] || "").toUpperCase(),
-        right: exercises[index + 6] ? String(exercises[index + 6]).toUpperCase() : "",
+        left: String(exercises[index] || ""),
+        right: exercises[index + 6] ? String(exercises[index + 6]) : "",
       }));
   }
   if (w.type === "cardio_4group") {
     return (["A", "B", "C", "D"] as const)
       .map((letter) => {
         const names = (w.groups?.[letter] || []).map((item: any) => item.exercise).filter(Boolean);
-        return names.length ? { left: `${letter}: ${names.join(" - ").toUpperCase()}` } : null;
+        return names.length ? { left: `${letter}: ${names.join(" - ")}` } : null;
       })
       .filter(Boolean) as { left: string }[];
   }
@@ -1034,17 +1034,17 @@ function workoutExercisePreviewRows(w: any): { left: string; right?: string }[] 
 function WorkoutPreviewRows({ workout }: { workout: any }) {
   const rows = workoutExercisePreviewRows(workout);
   return (
-    <View className="mt-1">
+    <View className="mt-1 gap-1">
       {rows.map((row, index) => (
         <View key={index} className={row.right ? "flex-row gap-2" : ""}>
           <Text
-            className={`text-zinc-300 text-xl font-bold leading-5 ${row.right ? "flex-1" : ""}`}
+            className={`text-zinc-300 text-lg font-bold leading-6 ${row.right ? "flex-1" : ""}`}
             numberOfLines={1}
           >
             {row.left}
           </Text>
           {row.right ? (
-            <Text className="text-zinc-300 text-xl font-bold leading-5 flex-1" numberOfLines={1}>
+            <Text className="text-zinc-300 text-lg font-bold leading-6 flex-1" numberOfLines={1}>
               {row.right}
             </Text>
           ) : null}
