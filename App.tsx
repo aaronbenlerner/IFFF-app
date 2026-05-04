@@ -1001,13 +1001,13 @@ function ExtrasView({
 function workoutExercisePreviewRows(w: any): { left: string; right?: string }[] {
   if (w.type === "strength_split") {
     return (w.groups || [])
-      .map((g: any, index: number) => g.exercise ? { left: `${index + 1}. ${g.exercise}` } : null)
+      .map((g: any) => g.exercise ? { left: g.exercise.toUpperCase() } : null)
       .filter(Boolean)
       .slice(0, 6) as { left: string }[];
   }
   if (w.type === "strength_total_body") {
     return [...(w.pattern1 || []), ...(w.pattern2 || []), ...(w.pattern3 || [])]
-      .map((r: any, index: number) => r.exercise ? { left: `${index + 1}. ${r.exercise}` } : null)
+      .map((r: any) => r.exercise ? { left: r.exercise.toUpperCase() } : null)
       .filter(Boolean)
       .slice(0, 6) as { left: string }[];
   }
@@ -1016,15 +1016,15 @@ function workoutExercisePreviewRows(w: any): { left: string; right?: string }[] 
     return Array.from({ length: Math.ceil(exercises.length / 2) })
       .slice(0, 6)
       .map((_, index) => ({
-        left: `${index + 1}. ${exercises[index] || ""}`,
-        right: exercises[index + 6] ? `${index + 7}. ${exercises[index + 6]}` : "",
+        left: String(exercises[index] || "").toUpperCase(),
+        right: exercises[index + 6] ? String(exercises[index + 6]).toUpperCase() : "",
       }));
   }
   if (w.type === "cardio_4group") {
     return (["A", "B", "C", "D"] as const)
       .map((letter) => {
         const names = (w.groups?.[letter] || []).map((item: any) => item.exercise).filter(Boolean);
-        return names.length ? { left: `${letter}: ${names.join(" - ")}` } : null;
+        return names.length ? { left: `${letter}: ${names.join(" - ").toUpperCase()}` } : null;
       })
       .filter(Boolean) as { left: string }[];
   }
@@ -1034,17 +1034,17 @@ function workoutExercisePreviewRows(w: any): { left: string; right?: string }[] 
 function WorkoutPreviewRows({ workout }: { workout: any }) {
   const rows = workoutExercisePreviewRows(workout);
   return (
-    <View className="mt-1 gap-0.5">
+    <View className="mt-1">
       {rows.map((row, index) => (
         <View key={index} className={row.right ? "flex-row gap-2" : ""}>
           <Text
-            className={`text-zinc-400 text-xs leading-5 ${row.right ? "flex-1" : ""}`}
+            className={`text-zinc-300 text-xl font-bold leading-5 ${row.right ? "flex-1" : ""}`}
             numberOfLines={1}
           >
             {row.left}
           </Text>
           {row.right ? (
-            <Text className="text-zinc-400 text-xs leading-5 flex-1" numberOfLines={1}>
+            <Text className="text-zinc-300 text-xl font-bold leading-5 flex-1" numberOfLines={1}>
               {row.right}
             </Text>
           ) : null}
@@ -1087,15 +1087,11 @@ function TodayScreen({
   }, [history]);
 
   return (
-    <ScrollView contentContainerClassName="p-4 pb-24 gap-4">
-      <View className="bg-amber-500 rounded-lg p-5">
-        <Text className="text-[10px] tracking-[2.5px] font-mono uppercase text-black/70">
-          Today - Week {week}
+    <ScrollView contentContainerClassName="p-4 pb-24 gap-3">
+      <View className="bg-amber-500 rounded-lg px-4 py-3">
+        <Text className="text-3xl text-black font-archivo" numberOfLines={1} adjustsFontSizeToFit>
+          ({week}) {todayName} - {slot.title}
         </Text>
-        <Text className="text-3xl text-black font-archivo mt-1">
-          {todayName.toUpperCase()}
-        </Text>
-        <Text className="text-xl font-bold text-black mt-3">{slot.title}</Text>
         {slot.optional ? (
           <Text className="text-xs text-black/70 mt-1">
             Optional - take rest if needed
@@ -1139,9 +1135,6 @@ function TodayScreen({
                   onPress={() => onPick({ kind: "workout", workoutId: w.id })}
                   className="bg-zinc-900 border border-zinc-800 rounded-md p-3 flex-row items-center"
                 >
-                  <Text className="text-2xl mr-3">
-                    {(CATEGORY_ICONS as any)[w.category] || "IFFF"}
-                  </Text>
                   <View className="flex-1">
                     <Text
                       className="text-white font-bold text-sm"
