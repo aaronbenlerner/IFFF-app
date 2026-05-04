@@ -1,5 +1,5 @@
 import "./global.css";
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -469,9 +469,11 @@ function SwapModal({
   onClose: () => void;
 }) {
   const [pendingExercise, setPendingExercise] = useState<Exercise | null>(null);
+  const exerciseListRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     setPendingExercise(null);
+    requestAnimationFrame(() => exerciseListRef.current?.scrollTo({ y: 0, animated: false }));
   }, [target?.slotKey, selectedMode]);
 
   if (!target) return null;
@@ -548,7 +550,7 @@ function SwapModal({
                 </ScrollView>
               </View>
 
-              <ScrollView contentContainerClassName="p-4 gap-2">
+              <ScrollView ref={exerciseListRef} contentContainerClassName="p-4 gap-2">
                 {candidates.length === 0 ? (
                   <Text className="text-zinc-500 text-sm">
                     No alternatives found for this category and mode.
@@ -576,28 +578,28 @@ function SwapModal({
                 <Pressable
                   onPress={() => pendingExercise && onPick(pendingExercise)}
                   disabled={!pendingExercise}
-                  className={`py-3 rounded-md items-center ${pendingExercise ? "bg-amber-500" : "bg-zinc-900 border border-zinc-800"}`}
+                  className={`py-3.5 rounded-md items-center ${pendingExercise ? "bg-amber-500" : "bg-zinc-900 border border-zinc-800"}`}
                 >
-                  <Text className={`text-xs font-black uppercase tracking-wider ${pendingExercise ? "text-black" : "text-zinc-600"}`}>
+                  <Text className={`text-sm font-black uppercase tracking-wider ${pendingExercise ? "text-black" : "text-zinc-600"}`}>
                     Use Exercise
                   </Text>
                 </Pressable>
                 <View className="flex-row gap-2">
                 <Pressable
                   onPress={onClose}
-                  className="flex-1 bg-zinc-900 border border-zinc-800 py-3 rounded-md items-center"
+                  className="flex-1 bg-zinc-900 border border-zinc-800 py-3.5 rounded-md items-center"
                 >
-                  <Text className="text-zinc-300 text-xs font-bold uppercase tracking-wider">
+                  <Text className="text-zinc-300 text-sm font-bold uppercase tracking-wider">
                     Cancel
                   </Text>
                 </Pressable>
                 <Pressable
                   onPress={onClear}
                   disabled={!currentSubstitution}
-                  className={`flex-1 py-3 rounded-md items-center ${currentSubstitution ? "bg-red-500" : "bg-zinc-900 border border-zinc-800"}`}
+                  className={`flex-1 py-3.5 rounded-md items-center ${currentSubstitution ? "bg-red-500" : "bg-zinc-900 border border-zinc-800"}`}
                 >
                   <Text
-                    className={`text-xs font-bold uppercase tracking-wider ${currentSubstitution ? "text-white" : "text-zinc-600"}`}
+                    className={`text-sm font-bold uppercase tracking-wider ${currentSubstitution ? "text-white" : "text-zinc-600"}`}
                   >
                     Reset Slot
                   </Text>
@@ -996,29 +998,60 @@ function ExtrasView({
 // TODAY SCREEN
 // ============================================================
 
-function workoutExercisePreview(w: any) {
+function workoutExercisePreviewRows(w: any): { left: string; right?: string }[] {
   if (w.type === "strength_split") {
-    return (w.groups || []).map((g: any) => g.exercise).filter(Boolean).join(" - ");
+    return (w.groups || [])
+      .map((g: any, index: number) => g.exercise ? { left: `${index + 1}. ${g.exercise}` } : null)
+      .filter(Boolean)
+      .slice(0, 6) as { left: string }[];
   }
   if (w.type === "strength_total_body") {
     return [...(w.pattern1 || []), ...(w.pattern2 || []), ...(w.pattern3 || [])]
-      .map((r: any) => r.exercise)
+      .map((r: any, index: number) => r.exercise ? { left: `${index + 1}. ${r.exercise}` } : null)
       .filter(Boolean)
-      .join(" - ");
+      .slice(0, 6) as { left: string }[];
   }
   if (w.type === "cardio_12") {
-    return (w.exercises || []).map((e: any) => e.exercise).filter(Boolean).join(" - ");
+    const exercises = (w.exercises || []).map((e: any) => e.exercise).filter(Boolean);
+    return Array.from({ length: Math.ceil(exercises.length / 2) })
+      .slice(0, 6)
+      .map((_, index) => ({
+        left: `${index + 1}. ${exercises[index] || ""}`,
+        right: exercises[index + 6] ? `${index + 7}. ${exercises[index + 6]}` : "",
+      }));
   }
   if (w.type === "cardio_4group") {
-    const names: string[] = [];
-    for (const letter of ["A", "B", "C", "D"] as const) {
-      for (const item of (w.groups?.[letter] || [])) {
-        if (item.exercise) names.push(item.exercise);
-      }
-    }
-    return names.join(" - ");
+    return (["A", "B", "C", "D"] as const)
+      .map((letter) => {
+        const names = (w.groups?.[letter] || []).map((item: any) => item.exercise).filter(Boolean);
+        return names.length ? { left: `${letter}: ${names.join(" - ")}` } : null;
+      })
+      .filter(Boolean) as { left: string }[];
   }
-  return "";
+  return [];
+}
+
+function WorkoutPreviewRows({ workout }: { workout: any }) {
+  const rows = workoutExercisePreviewRows(workout);
+  return (
+    <View className="mt-1 gap-0.5">
+      {rows.map((row, index) => (
+        <View key={index} className={row.right ? "flex-row gap-2" : ""}>
+          <Text
+            className={`text-zinc-400 text-xs leading-5 ${row.right ? "flex-1" : ""}`}
+            numberOfLines={1}
+          >
+            {row.left}
+          </Text>
+          {row.right ? (
+            <Text className="text-zinc-400 text-xs leading-5 flex-1" numberOfLines={1}>
+              {row.right}
+            </Text>
+          ) : null}
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function TodayScreen({
@@ -1116,12 +1149,7 @@ function TodayScreen({
                     >
                       {w.name}
                     </Text>
-                    <Text
-                      className="text-zinc-500 text-[11px] leading-4 mt-0.5"
-                      numberOfLines={2}
-                    >
-                      {workoutExercisePreview(w)}
-                    </Text>
+                    <WorkoutPreviewRows workout={w} />
                   </View>
                   {last ? (
                     <Text className="text-[9px] font-mono text-emerald-500 uppercase tracking-wider mx-2">
