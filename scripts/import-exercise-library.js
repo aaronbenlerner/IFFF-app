@@ -89,7 +89,8 @@ function normalizeName(value) {
 function normalizeMode(value) {
   const v = normalizeName(value || "");
   if (!v) return "General";
-  if (v.includes("machine") || v.includes("cable")) return "Machines";
+  if (v.includes("cable")) return "Cables";
+  if (v.includes("machine")) return "Machines";
   if (v.includes("barbell")) return "Barbell";
   if (v.includes("dumbbell")) return "Dumbbells";
   if (v.includes("bodyweight") || v.includes("push up") || v.includes("dip")) return "Bodyweight";
