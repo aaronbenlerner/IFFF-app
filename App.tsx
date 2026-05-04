@@ -264,10 +264,10 @@ function getYouTubeId(url?: string | null) {
   return match ? match[1] : null;
 }
 
-function getYouTubeEmbedUrl(url?: string | null) {
+function getYouTubeWatchUrl(url?: string | null) {
   const id = getYouTubeId(url);
   if (!id) return null;
-  return `https://www.youtube.com/embed/${id}?playsinline=1&rel=0&modestbranding=1`;
+  return `https://www.youtube.com/watch?v=${id}`;
 }
 
 function VideoLink({
@@ -301,7 +301,8 @@ function VideoPanel({
   onClose: () => void;
 }) {
   if (!video) return null;
-  const embedUrl = getYouTubeEmbedUrl(video.url);
+  const watchUrl = getYouTubeWatchUrl(video.url);
+  if (!watchUrl) return null;
   return (
     <View className="bg-zinc-950 border border-zinc-800 rounded-md overflow-hidden">
       <View className="flex-row items-center justify-between px-3 py-2 border-b border-zinc-800">
@@ -312,38 +313,22 @@ function VideoPanel({
           <X size={14} color="#a1a1aa" />
         </Pressable>
       </View>
-      {embedUrl ? (
-        <View className="w-full aspect-video bg-black">
-          <WebView
-            source={{ uri: embedUrl }}
-            allowsFullscreenVideo
-            mediaPlaybackRequiresUserAction
-            javaScriptEnabled
-            domStorageEnabled
-            startInLoadingState
-            className="bg-black"
-          />
-        </View>
-      ) : (
-        <View className="aspect-video bg-zinc-900 items-center justify-center p-4">
-          <CirclePlay size={28} color="#f59e0b" />
-          <Text className="text-zinc-400 text-sm text-center mt-2">
-            This video link cannot be embedded.
-          </Text>
-        </View>
-      )}
+      <View className="w-full aspect-video bg-black">
+        <WebView
+          source={{ uri: watchUrl }}
+          allowsFullscreenVideo
+          mediaPlaybackRequiresUserAction
+          javaScriptEnabled
+          domStorageEnabled
+          startInLoadingState
+          setSupportMultipleWindows={false}
+          className="bg-black"
+        />
+      </View>
       <View className="p-3 border-t border-zinc-800">
         <Text className="text-white text-sm font-bold" numberOfLines={2}>
           {video.title}
         </Text>
-        <Pressable
-          onPress={() => Linking.openURL(video.url).catch(() => {})}
-          className="self-start mt-2 px-3 py-1.5 rounded border border-zinc-700"
-        >
-          <Text className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
-            Open in YouTube
-          </Text>
-        </Pressable>
       </View>
     </View>
   );
