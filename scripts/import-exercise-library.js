@@ -88,20 +88,11 @@ function normalizeName(value) {
 
 function normalizeMode(value) {
   const v = normalizeName(value || "");
-  if (!v) return "General";
+  if (!v) return "Freeweights";
   if (v.includes("cable")) return "Cables";
-  if (v.includes("machine")) return "Machines";
-  if (v.includes("barbell")) return "Barbell";
-  if (v.includes("dumbbell")) return "Dumbbells";
+  if (v.includes("machine") || v.includes("bike") || v.includes("rower") || v.includes("ski")) return "Machines";
   if (v.includes("bodyweight") || v.includes("push up") || v.includes("dip")) return "Bodyweight";
-  if (v.includes("kettlebell")) return "Kettlebell";
-  if (v.includes("medicine ball")) return "Medicine Ball";
-  if (v.includes("monster band")) return "Monster Band";
-  if (v.includes("farmer")) return "Farmers Walk";
-  if (v.includes("ladder")) return "Agility Ladder";
-  if (v.includes("battle rope")) return "Battle Ropes";
-  if (v.includes("cardio machine") || v.includes("bike") || v.includes("rower") || v.includes("ski")) return "Cardio Machines";
-  return value || "General";
+  return "Freeweights";
 }
 
 const STRENGTH_MODE_MARKERS = new Map([
@@ -395,19 +386,11 @@ export function normalizeExerciseName(value: string | null | undefined) {
 export function normalizeMode(value: string | null | undefined) {
   const raw = String(value || "");
   const v = normalizeExerciseName(raw);
-  if (!v) return "General";
-  if (v.includes("machine") || v.includes("cable")) return "Machines";
-  if (v.includes("barbell")) return "Barbell";
-  if (v.includes("dumbbell")) return "Dumbbells";
+  if (!v) return "Freeweights";
+  if (v.includes("cable")) return "Cables";
+  if (v.includes("machine") || v.includes("bike") || v.includes("rower") || v.includes("ski")) return "Machines";
   if (v.includes("bodyweight") || v.includes("push up") || v.includes("dip")) return "Bodyweight";
-  if (v.includes("kettlebell")) return "Kettlebell";
-  if (v.includes("medicine ball")) return "Medicine Ball";
-  if (v.includes("monster band")) return "Monster Band";
-  if (v.includes("farmer")) return "Farmers Walk";
-  if (v.includes("ladder")) return "Agility Ladder";
-  if (v.includes("battle rope")) return "Battle Ropes";
-  if (v.includes("cardio machine") || v.includes("bike") || v.includes("rower") || v.includes("ski")) return "Cardio Machines";
-  return raw || "General";
+  return "Freeweights";
 }
 
 export function inferExerciseCategoryKey(

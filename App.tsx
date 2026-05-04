@@ -274,10 +274,12 @@ function VideoLink({
   url,
   title,
   onSelect,
+  compact = false,
 }: {
   url?: string | null;
   title: string;
   onSelect?: (video: ActiveVideo) => void;
+  compact?: boolean;
 }) {
   const open = useCallback(() => {
     if (!url) return;
@@ -286,9 +288,14 @@ function VideoLink({
   }, [onSelect, title, url]);
   if (!url) return null;
   return (
-    <Pressable onPress={open} className="flex-row items-center mt-1">
-      <CirclePlay size={12} strokeWidth={2.5} color="#f59e0b" />
-      <Text className="text-amber-500 text-[11px] ml-1">Demo</Text>
+    <Pressable
+      onPress={open}
+      className={compact ? "h-10 px-3 rounded-md border border-zinc-700 flex-row items-center justify-center" : "flex-row items-center mt-1"}
+    >
+      <CirclePlay size={compact ? 15 : 12} strokeWidth={2.5} color="#f59e0b" />
+      <Text className={`text-amber-500 font-bold uppercase tracking-wider ml-1 ${compact ? "text-[10px]" : "text-[11px]"}`}>
+        Demo
+      </Text>
     </Pressable>
   );
 }
@@ -392,24 +399,26 @@ function ExerciseRow({
           {meta ? (
             <Text className="text-[11px] font-mono text-amber-500 mt-0.5">{meta}</Text>
           ) : null}
-          <View className="flex-row items-center justify-between mt-1">
-            <VideoLink url={video} title={exercise} onSelect={onVideoSelect} />
+        </View>
+        {(video && onVideoSelect) || onSwap ? (
+          <View className="ml-3 gap-2 w-24">
+            <VideoLink url={video} title={exercise} onSelect={onVideoSelect} compact />
             {onSwap ? (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  onSwap();
-                }}
-                className={`px-2 py-1 rounded border ${swapped ? "border-amber-500 bg-amber-500/10" : "border-zinc-700"}`}
-              >
-                <Text className={`text-[10px] font-bold uppercase tracking-wider ${swapped ? "text-amber-500" : "text-zinc-300"}`}>
-                  Swap
-                </Text>
-              </Pressable>
+                <Pressable
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    onSwap();
+                  }}
+                  className={`h-10 px-3 rounded-md border items-center justify-center ${swapped ? "border-amber-500 bg-amber-500/10" : "border-zinc-700"}`}
+                >
+                  <Text className={`text-[10px] font-bold uppercase tracking-wider ${swapped ? "text-amber-500" : "text-zinc-300"}`}>
+                    Swap
+                  </Text>
+                </Pressable>
             ) : null}
           </View>
+        ) : null}
         </View>
-      </View>
     </Pressable>
   );
 }
