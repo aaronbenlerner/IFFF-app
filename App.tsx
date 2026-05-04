@@ -6,12 +6,12 @@ import {
   Pressable,
   ScrollView,
   Modal,
-  Image,
   Linking,
   AppState,
   StatusBar,
   type AppStateStatus,
 } from "react-native";
+import { WebView } from "react-native-webview";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import {
   Calendar,
@@ -264,6 +264,12 @@ function getYouTubeId(url?: string | null) {
   return match ? match[1] : null;
 }
 
+function getYouTubeEmbedUrl(url?: string | null) {
+  const id = getYouTubeId(url);
+  if (!id) return null;
+  return `https://www.youtube.com/embed/${id}?playsinline=1&rel=0&modestbranding=1`;
+}
+
 function VideoLink({
   url,
   title,
@@ -295,8 +301,7 @@ function VideoPanel({
   onClose: () => void;
 }) {
   if (!video) return null;
-  const id = getYouTubeId(video.url);
-  const thumbnail = id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : null;
+  const embedUrl = getYouTubeEmbedUrl(video.url);
   return (
     <View className="bg-zinc-950 border border-zinc-800 rounded-md overflow-hidden">
       <View className="flex-row items-center justify-between px-3 py-2 border-b border-zinc-800">
@@ -307,30 +312,39 @@ function VideoPanel({
           <X size={14} color="#a1a1aa" />
         </Pressable>
       </View>
-      <Pressable
-        onPress={() => Linking.openURL(video.url).catch(() => {})}
-        className="flex-row p-3 items-center"
-      >
-        {thumbnail ? (
-          <Image
-            source={{ uri: thumbnail }}
-            className="w-28 h-16 rounded bg-zinc-900"
-            resizeMode="cover"
+      {embedUrl ? (
+        <View className="w-full aspect-video bg-black">
+          <WebView
+            source={{ uri: embedUrl }}
+            allowsFullscreenVideo
+            mediaPlaybackRequiresUserAction
+            javaScriptEnabled
+            domStorageEnabled
+            startInLoadingState
+            className="bg-black"
           />
-        ) : (
-          <View className="w-28 h-16 rounded bg-zinc-900 items-center justify-center">
-            <CirclePlay size={22} color="#f59e0b" />
-          </View>
-        )}
-        <View className="flex-1 ml-3">
-          <Text className="text-white text-sm font-bold" numberOfLines={2}>
-            {video.title}
-          </Text>
-          <Text className="text-zinc-500 text-[11px] mt-1">
-            Tap to open YouTube
+        </View>
+      ) : (
+        <View className="aspect-video bg-zinc-900 items-center justify-center p-4">
+          <CirclePlay size={28} color="#f59e0b" />
+          <Text className="text-zinc-400 text-sm text-center mt-2">
+            This video link cannot be embedded.
           </Text>
         </View>
-      </Pressable>
+      )}
+      <View className="p-3 border-t border-zinc-800">
+        <Text className="text-white text-sm font-bold" numberOfLines={2}>
+          {video.title}
+        </Text>
+        <Pressable
+          onPress={() => Linking.openURL(video.url).catch(() => {})}
+          className="self-start mt-2 px-3 py-1.5 rounded border border-zinc-700"
+        >
+          <Text className="text-[10px] text-zinc-300 font-bold uppercase tracking-wider">
+            Open in YouTube
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
