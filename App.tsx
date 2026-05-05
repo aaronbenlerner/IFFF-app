@@ -458,6 +458,7 @@ function SwapModal({
   onModeChange,
   onPick,
   onClear,
+  onVideoSelect,
   onClose,
 }: {
   target: SwapTarget | null;
@@ -466,6 +467,7 @@ function SwapModal({
   onModeChange: (mode: string) => void;
   onPick: (exercise: Exercise) => void;
   onClear: () => void;
+  onVideoSelect: (video: ActiveVideo) => void;
   onClose: () => void;
 }) {
   const [pendingExercise, setPendingExercise] = useState<Exercise | null>(null);
@@ -491,16 +493,16 @@ function SwapModal({
 
   return (
     <Modal transparent visible animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 bg-black/80 justify-end">
-        <View className="bg-zinc-950 border-t border-zinc-800 rounded-t-lg max-h-[86%]">
+      <View className="flex-1 bg-black/80 justify-start pt-4">
+        <View className="bg-zinc-950 border-b border-zinc-800 rounded-b-lg max-h-[92%]">
           <View className="p-4 border-b border-zinc-800">
             <Text className="text-[10px] tracking-[2.5px] text-amber-500 font-mono uppercase">
               Swap Exercise
             </Text>
-            <Text className="text-white text-lg font-bold mt-1" numberOfLines={2}>
+            <Text className="text-white text-lg font-bold leading-6 mt-1" numberOfLines={2}>
               {target.exercise}
             </Text>
-            <Text className="text-zinc-500 text-[11px] mt-1">
+            <Text className="text-zinc-500 text-sm leading-5 mt-1">
               {categoryKey
                 ? `${sameMode ? "Current mode" : "Changing to"}: ${currentMode} - Replacement: ${replacementName}`
                 : "No master-list category match found"}
@@ -562,13 +564,20 @@ function SwapModal({
                       onPress={() => setPendingExercise(exercise)}
                       className={`rounded-md p-3 border ${pendingExercise?.id === exercise.id ? "bg-amber-500/10 border-amber-500" : "bg-zinc-900 border-zinc-800"}`}
                     >
-                      <Text className={`font-bold text-sm ${pendingExercise?.id === exercise.id ? "text-amber-500" : "text-white"}`}>
+                      <Text className={`font-bold text-lg leading-6 ${pendingExercise?.id === exercise.id ? "text-amber-500" : "text-white"}`}>
                         {exercise.name}
                       </Text>
-                      <Text className="text-[11px] text-zinc-500 mt-0.5">
+                      <Text className="text-sm text-zinc-500 mt-0.5">
                         {exercise.categoryLabel} - {exercise.modeGroup}
                       </Text>
-                      <VideoLink url={exercise.video} title={exercise.name} />
+                      <View className="self-start mt-2">
+                        <VideoLink
+                          url={exercise.video}
+                          title={exercise.name}
+                          onSelect={onVideoSelect}
+                          compact
+                        />
+                      </View>
                     </Pressable>
                   ))
                 )}
@@ -1663,6 +1672,7 @@ function WorkoutScreen({
         onModeChange={setSwapMode}
         onPick={pickSwap}
         onClear={clearSwap}
+        onVideoSelect={setActiveVideo}
         onClose={() => {
           setSwapTarget(null);
           setSwapMode(null);
