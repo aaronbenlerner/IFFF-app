@@ -458,7 +458,6 @@ function SwapModal({
   onModeChange,
   onPick,
   onClear,
-  onVideoSelect,
   onClose,
 }: {
   target: SwapTarget | null;
@@ -467,14 +466,15 @@ function SwapModal({
   onModeChange: (mode: string) => void;
   onPick: (exercise: Exercise) => void;
   onClear: () => void;
-  onVideoSelect: (video: ActiveVideo) => void;
   onClose: () => void;
 }) {
   const [pendingExercise, setPendingExercise] = useState<Exercise | null>(null);
+  const [swapVideo, setSwapVideo] = useState<ActiveVideo | null>(null);
   const exerciseListRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     setPendingExercise(null);
+    setSwapVideo(null);
     requestAnimationFrame(() => exerciseListRef.current?.scrollTo({ y: 0, animated: false }));
   }, [target?.slotKey, selectedMode]);
 
@@ -552,6 +552,10 @@ function SwapModal({
                 </ScrollView>
               </View>
 
+              <View className="px-4 pt-3">
+                <VideoPanel video={swapVideo} onClose={() => setSwapVideo(null)} />
+              </View>
+
               <ScrollView ref={exerciseListRef} contentContainerClassName="p-4 gap-2">
                 {candidates.length === 0 ? (
                   <Text className="text-zinc-500 text-sm">
@@ -574,7 +578,7 @@ function SwapModal({
                         <VideoLink
                           url={exercise.video}
                           title={exercise.name}
-                          onSelect={onVideoSelect}
+                          onSelect={setSwapVideo}
                           compact
                         />
                       </View>
@@ -1063,6 +1067,19 @@ function WorkoutPreviewRows({ workout }: { workout: any }) {
   );
 }
 
+function templateLabel(workout: any) {
+  if (workout.template) return String(workout.template).toUpperCase();
+  if (workout.type === "strength_split") {
+    const count = (workout.groups || []).length;
+    if (count >= 5) return "HEX";
+    if (count === 3) return "TRI";
+    return "SUPER";
+  }
+  if (workout.type === "cardio_12") return "CARDIO 12";
+  if (workout.type === "cardio_4group") return "4X4";
+  return "";
+}
+
 function TodayScreen({
   week,
   day,
@@ -1146,10 +1163,10 @@ function TodayScreen({
                 >
                   <View className="flex-1">
                     <Text
-                      className="text-white font-bold text-sm"
+                      className="text-blue-400 font-black text-sm tracking-wider"
                       numberOfLines={1}
                     >
-                      {w.name}
+                      {templateLabel(w)}
                     </Text>
                     <WorkoutPreviewRows workout={w} />
                   </View>
@@ -1672,7 +1689,6 @@ function WorkoutScreen({
         onModeChange={setSwapMode}
         onPick={pickSwap}
         onClear={clearSwap}
-        onVideoSelect={setActiveVideo}
         onClose={() => {
           setSwapTarget(null);
           setSwapMode(null);
